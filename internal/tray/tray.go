@@ -24,10 +24,16 @@ type Status struct {
 	Pending          int
 }
 
+// Actions are what the menu can trigger in the daemon.
+type Actions struct {
+	Restart func() // exit cleanly; the service supervisor starts a fresh daemon
+	Stop    func() // stop the service until it is started again
+}
+
 // Run blocks until ctx is done. status is polled every minute. It must be
 // called from the main goroutine on some platforms; on Linux any goroutine
 // works, but main keeps it simple.
-func Run(ctx context.Context, url string, status func(context.Context) (Status, error), log *slog.Logger) {
+func Run(ctx context.Context, url, dataDir string, status func(context.Context) (Status, error), act Actions, log *slog.Logger) {
 	onReady := func() {
 		systray.SetIcon(icon)
 		systray.SetTitle("vura")
@@ -39,6 +45,9 @@ func Run(ctx context.Context, url string, status func(context.Context) (Status, 
 		systray.AddSeparator()
 		open := systray.AddMenuItem("Open dashboard", "app window on the local daemon")
 		refresh := systray.AddMenuItem("Refresh", "")
+		systray.AddSeparator()
+		restart := systray.AddMenuItem("Restart vurad", "exit and let systemd start it again")
+		stop := systray.AddMenuItem("Stop vurad", "stop collecting until `systemctl --user start vurad` or next login")
 		update := func() {
 			s, err := status(ctx)
 			if err != nil {
@@ -73,8 +82,18 @@ func Run(ctx context.Context, url string, status func(context.Context) (Status, 
 				case <-refresh.ClickedCh:
 					update()
 				case <-open.ClickedCh:
-					if err := launch.Open(url); err != nil {
+					if err := launch.Open(url, dataDir); err != nil {
 						log.Warn("tray: open", "err", err)
+					}
+				case <-restart.ClickedCh:
+					if act.Restart != nil {
+						log.Info("tray: restart requested")
+						act.Restart()
+					}
+				case <-stop.ClickedCh:
+					if act.Stop != nil {
+						log.Info("tray: stop requested")
+						act.Stop()
 					}
 				}
 			}

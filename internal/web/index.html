@@ -176,11 +176,11 @@ async function loadOverview() {
     const segs = d.buckets.map(b => `<i style="width:${100*b.observed/max}%;background:${colorFor(b.bucket)}" title="${esc(labelFor(b.bucket,b.label))} ${hm(b.observed)}"></i>`).join('')
       + (d.unattributed ? `<i style="width:${100*d.unattributed/max}%;background:var(--rule)" title="unattributed ${hm(d.unattributed)}"></i>` : '');
     const chips = d.buckets.map(b => `<span><span class="dot" style="background:${colorFor(b.bucket)}"></span>${esc(labelFor(b.bucket,b.label))} ${hm(b.observed)}${b.remote?' ⇡':''}</span>`).join('');
-    const state = d.state ? `<span class="chip ${d.state}">${d.state}</span>` : '';
+    const state = d.state ? `<span class="chip ${d.state}" title="${d.pushed ? 'hours as logged in Tempo; ' + hm(d.observed) + ' observed' : ''}">${d.state}</span>` : '';
     return `<div class="dayrow ${d.day===selected?'sel':''}" data-day="${d.day}">
       <div class="d"><b>${d.weekday}</b>${d.day.slice(5)}</div>
       <div class="bar">${segs}</div>
-      <div class="t mono">${hm(d.observed)}</div>
+      <div class="t mono" title="${d.pushed ? 'logged in Tempo (' + hm(d.observed) + ' observed)' : 'observed'}">${hm(d.pushed ? d.logged : d.observed)}</div>
       <div class="sub">${chips}${state}</div></div>`;
   }).join('');
   document.querySelectorAll('.dayrow').forEach(el => el.onclick = () => { selected = el.dataset.day; loadOverview(); loadDay(); });
@@ -234,8 +234,8 @@ async function loadDay() {
   const head = `<div class="dayhead"><h3>${esc(d.title)}</h3>
     ${d.wallStart ? `<span class="stat"><span>wall</span> <b class="mono">${t(d.wallStart)}–${t(d.wallEnd)}</b></span>` : ''}
     <span class="stat"><b>${hm(d.observed)}</b> <span>observed</span></span>
-    <span class="stat"><b>${hm(d.logged)}</b> <span>logged</span></span>
-    ${gain > 0 ? `<span class="stat"><span>rounding</span> <b>+${hm(gain)}</b></span>` : ''}
+    <span class="stat"><b>${hm(d.logged)}</b> <span>${d.inTempo ? 'in Tempo' : 'logged'}</span></span>
+    ${gain > 0 && !d.inTempo ? `<span class="stat"><span>rounding</span> <b>+${hm(gain)}</b></span>` : ''}
     ${d.state ? `<span class="chip ${d.state}">${d.state}</span>` : d.today ? '<span class="chip today">collecting</span>' : '<span class="chip pending">pending</span>'}
     ${d.blocking ? `<span class="chip pending">${d.blocking} need a decision</span>` : ''}
     ${d.edits ? `<span class="chip">${d.edits} edit${d.edits>1?'s':''}</span>` : ''}

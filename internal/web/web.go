@@ -91,6 +91,7 @@ type dayTotal struct {
 	Logged       int           `json:"logged"`
 	Unattributed int           `json:"unattributed"`
 	Calls        int           `json:"calls"`
+	Pushed       bool          `json:"pushed"` // buckets and logged come from Tempo worklogs
 	Buckets      []bucketTotal `json:"buckets"`
 }
 
@@ -161,6 +162,28 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 			dt.Buckets = append(dt.Buckets, *bt)
 			dt.Observed += bt.Observed
 			dt.Logged += bt.Logged
+		}
+		// A decided day is what reached Tempo, edits and all, not a fresh
+		// rebuild of the evidence. Keep observed from the evidence; take
+		// logged and the per-bucket split from the pushed worklogs.
+		if wls, err := h.st.WorklogsForDay(ctx, day); err == nil && len(wls) > 0 {
+			pushed := map[string]int{}
+			total := 0
+			for _, wl := range wls {
+				if wl.State == store.WorklogPushed {
+					pushed[wl.Bucket] += wl.Seconds
+					total += wl.Seconds
+				}
+			}
+			if total > 0 {
+				dt.Logged = total
+				dt.Buckets = dt.Buckets[:0]
+				for b, secs := range pushed {
+					bb := h.cfg.Buckets[b]
+					dt.Buckets = append(dt.Buckets, bucketTotal{Bucket: b, Label: bb.Label, Issue: bb.Issue, Observed: secs, Logged: secs, Remote: false})
+				}
+				dt.Pushed = true
+			}
 		}
 		sort.Slice(dt.Buckets, func(a, b int) bool { return dt.Buckets[a].Observed > dt.Buckets[b].Observed })
 		if !ws.IsZero() {
@@ -280,17 +303,25 @@ func (h *Handler) day(w http.ResponseWriter, r *http.Request) {
 	}
 	state, _ := h.st.DayState(ctx, day)
 	partial := false
+	pushedTotal := 0
 	for _, wl := range worklogs {
-		if wl.State == store.WorklogPushed && state != store.DayDone {
-			partial = true
+		if wl.State == store.WorklogPushed {
+			pushedTotal += wl.Seconds
+			if state != store.DayDone {
+				partial = true
+			}
 		}
+	}
+	loggedSec := int(t.Logged.Seconds())
+	if pushedTotal > 0 {
+		loggedSec = pushedTotal
 	}
 	dd, _ := time.ParseInLocation("2006-01-02", day, h.cfg.Location)
 	writeJSON(w, map[string]any{
 		"day": day, "title": dd.Format("Monday 2 January"), "state": state,
 		"dayStart": from.Format(time.RFC3339), "dayEnd": to.Format(time.RFC3339),
 		"wallStart": fmtT(t.WallStart), "wallEnd": fmtT(t.WallEnd),
-		"observed": int(t.Observed.Seconds()), "logged": int(t.Logged.Seconds()),
+		"observed": int(t.Observed.Seconds()), "logged": loggedSec, "inTempo": pushedTotal,
 		"unassigned": t.Unassigned, "blocking": t.Blocking,
 		"edits": len(d.Ops), "editsSkipped": skipped, "today": day == h.cfg.Boundary.Day(time.Now().In(h.cfg.Location)),
 		"partial": partial,

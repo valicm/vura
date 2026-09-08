@@ -220,7 +220,7 @@ account id; both are fetched once and cached. Mind Tempo's daily hour limit
 The nag timer notifies at 10:00 (and 19:00 if still pending) while days are
 waiting. Open the dashboard, or `vura reconcile` in a terminal:
 
-    vura open                # dashboard as an app window; also a launcher in GNOME
+    vura open                # dashboard as an app window in its own browser profile; also a launcher in GNOME
     vura status              # observed hours per bucket per working day
     vura day yesterday       # one day as sessions with evidence
     vura reconcile           # walk pending days, accept pushes to Tempo

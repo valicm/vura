@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -162,9 +163,22 @@ func run(log *slog.Logger, cfgPath string) error {
 				stop()
 			}
 		}()
-		tray.Run(ctx, "http://"+cfg.Sources.Listen+"/", func(ctx context.Context) (tray.Status, error) {
+		actions := tray.Actions{
+			// A clean exit; the unit has Restart=always, so systemd brings a
+			// fresh daemon (and a fresh tray icon) back within seconds.
+			Restart: func() { _ = st.Audit(context.Background(), "vurad.restart", "tray"); stop() },
+			// Ask systemd to stop the unit; it sends SIGTERM and we exit cleanly.
+			Stop: func() {
+				_ = st.Audit(context.Background(), "vurad.stopped", "tray")
+				if err := exec.Command("systemctl", "--user", "stop", "--no-block", "vurad.service").Run(); err != nil {
+					log.Warn("tray: systemctl stop", "err", err)
+					stop()
+				}
+			},
+		}
+		tray.Run(ctx, "http://"+cfg.Sources.Listen+"/", cfg.DataDir, func(ctx context.Context) (tray.Status, error) {
 			return trayStatus(ctx, st, cfg, res)
-		}, log)
+		}, actions, log)
 		wg.Wait()
 		_ = st.Audit(context.Background(), "vurad.stop", "")
 		return nil

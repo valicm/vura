@@ -24,7 +24,7 @@ install: build
 	install -Dm644 systemd/vura.desktop $(HOME)/.local/share/applications/vura.desktop
 	install -Dm644 assets/logo-128.png $(HOME)/.local/share/icons/hicolor/128x128/apps/vura.png
 	install -Dm644 assets/logo.svg $(HOME)/.local/share/icons/hicolor/scalable/apps/vura.svg
-	-gtk-update-icon-cache -q $(HOME)/.local/share/icons/hicolor 2>/dev/null
+	-gtk-update-icon-cache -q -t $(HOME)/.local/share/icons/hicolor 2>/dev/null || true
 	-update-desktop-database $(HOME)/.local/share/applications 2>/dev/null
 	@test -f $(HOME)/.config/vura/config.toml || install -Dm600 config.example.toml $(HOME)/.config/vura/config.toml
 	systemctl --user daemon-reload
