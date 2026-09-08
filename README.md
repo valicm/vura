@@ -4,14 +4,14 @@
 
 <h1 align="center">vura</h1>
 
-<p align="center"><em>The word <strong>vura</strong> is a dialect term that in Kajkavian (and partly in Chakavian) means a clock: the device that measures time, or the unit of sixty minutes.</em></p>
+<p align="center">The word <b>vura</b> is a dialect term that in Kajkavian (and partly in Chakavian) means a clock: the device that measures time, or the unit of sixty minutes.</b></p>
 
-<p align="center">A daemon that measures where your working day actually went, and a screen where you agree the worklogs before they reach Tempo.</p>
+<p align="center">A daemon (very opinionated) that measures where your working day actually went, and a screen where you agree the worklogs before they reach Tempo.</p>
 
-<p align="center">The purpose of Vura is not to automate time tracking and time to be billed. The purpose is to make easier for you to reconcile the previous day with as maximum input possible.</p>
+<p align="center"><i>The purpose of Vura is not to automate time tracking and time to be billed. The purpose is to make easier for you to reconcile the previous day with as maximum input possible.</i></p>
 
 
-<p align="center"> Vura had been built with Claude - Jean Claude Van Code (tm valicm - you heard this here first time) did good job in short time - let see it on longer period)
+<p align="center"><i><u>Vura had been built with Jean-Claude Van Code</u> (tm valicm - you heard this here first time) - did good job in short time, let see it on longer period)</i></p>
 <p align="center"><img src="assets/dashboard.png" width="880" alt="dashboard: the week per bucket, one day as a timeline with sessions and evidence"></p>
 
 ---
@@ -267,6 +267,70 @@ queue.
     browser/                    Chrome extension
     systemd/                    service, timers, desktop entry
     assets/                     logo
+
+## Setting up with Claude Code
+
+If you use Claude Code, paste this from a fresh clone and fill in the
+placeholders. The "About me" block is the part only you can supply: the
+mapping from repos, sites and channels to Tempo issues. The rules keep the
+first real push in your hands.
+
+````text
+I want to set up vura (https://github.com/valicm/vura), a Go daemon that
+measures where my working day went and reconciles it into Tempo worklogs.
+Read README.md first; it documents every source and its pitfalls.
+
+About me
+- Platform: Fedora, GNOME on Wayland (adjust if you find otherwise).
+- Tempo lives on Jira site: <yoursite.atlassian.net>, login <you@example.com>.
+- Git author emails: <list>.
+- Clients and the Tempo issue that receives each one's hours:
+    <CLIENT-A> -> <EXT-1>: repos <paths>, Jira project keys <KEYS>,
+        sites/domains <...>, meeting words <...>, Slack channels <...>
+    <CLIENT-B> -> <EXT-2>: ...
+    Internal   -> <INT-1>: ...
+- External sources I use: GitHub (<login>), GitLab (<url>, VPN-only? yes/no),
+  Jira sites <...>, Slack workspaces <...>, calendars: Proton / Google
+  Workspace / other.
+- Editors: <PhpStorm, GoLand, ...>; Claude Code: yes; browsers: <Chrome/Firefox>.
+- Terminal: bash / zsh / fish.
+
+What to do, in this order
+1. Build and install: `make install`. Confirm vurad.service and the timers
+   are active and the dashboard answers on http://127.0.0.1:4242/.
+2. Write ~/.wakatime.cfg BEFORE any WakaTime plugin is installed: a
+   [settings] header, api_url = http://127.0.0.1:4242/api, and a UUID key.
+   Then tell me exactly which plugins to install and where to click; verify
+   heartbeats arrive with `vura raw` or the dashboard's collector panel.
+3. Terminal: check atuin is installed and recording. On bash it needs
+   bash-preexec sourced before `atuin init`; fix that if the history is empty.
+4. Browser: load browser/ unpacked in Chrome; for Firefox configure the
+   WakaTime add-on with http://127.0.0.1:4242/api/v1. Confirm domain
+   heartbeats arrive.
+5. Write ~/.config/vura/config.toml from the facts above: identity, one
+   bucket per client with repos, tickets, domains, calendar and slack rules,
+   calendar feeds, anchors. Do not guess repo paths; list what exists under
+   my home and ask me to confirm the mapping.
+6. Tokens go in the GNOME keyring via secret-tool, never in the config.
+   Tell me which token to create where (Tempo, Atlassian, GitHub, GitLab,
+   Slack with the exact user scopes) and the secret-tool command for each.
+   I will paste them myself.
+7. Run `vura check` and fix anything it reports. Then `vura demo` so I can
+   see the tool on a synthetic day, and `vura day today` on my own data.
+
+Rules
+- Never push anything to Tempo. I will do the first accept myself after a
+  dry run. Never run `vura reconcile` without --dry-run.
+- Never store command arguments, message text or page titles anywhere.
+- Never commit my config, tokens, calendar URLs or client names to the repo.
+- If a source cannot be reached (VPN, admin restriction), skip it, say so,
+  and keep going with the rest.
+- When something is unmapped after a day of collection, propose the rule
+  and let me confirm before editing the config.
+
+When you are done, give me: what is collecting, what is not and why, the
+exact config you wrote, and the list of tokens still missing.
+````
 
 ## License
 
