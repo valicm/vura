@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>vura</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 16px; width: 360px; color: #18232b; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  input { width: 100%; box-sizing: border-box; font: 13px ui-monospace, monospace; padding: 6px 8px; }
+  button { margin-top: 10px; padding: 6px 14px; }
+  p { color: #5c6d79; margin: 10px 0 0; }
+  #status { font-family: ui-monospace, monospace; }
+</style>
+<label for="key">API key</label>
+<input id="key" placeholder="same as api_key in ~/.wakatime.cfg" autocomplete="off" spellcheck="false">
+<button id="save">Save</button>
+<p>Heartbeats go to <code>127.0.0.1:4242</code> only. Leave the key empty if <code>wakatime_key</code> is unset in vura's config.</p>
+<p id="status"></p>
+<script src="options.js"></script>

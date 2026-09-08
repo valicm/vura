@@ -1,0 +1,25 @@
+[Unit]
+Description=vura collector daemon
+Documentation=https://github.com/valicm/vura
+# Needs the session bus (mutter IdleMonitor) and pipewire; both live in the
+# user session. Started at login, restarted on any exit.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/vurad
+# `claude` for descriptions and `secret-tool` for tokens must be findable.
+Environment=PATH=%h/.local/bin:%h/bin:/usr/local/bin:/usr/bin:/bin
+Restart=always
+RestartSec=5s
+# Never let a stuck sample keep the machine awake or hog anything.
+Nice=10
+# Loopback only, but belt and braces.
+ProtectSystem=strict
+ReadWritePaths=%h/.local/share/vura -%h/.claude -%h/.claude.json
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=graphical-session.target

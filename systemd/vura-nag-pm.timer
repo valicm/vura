@@ -1,0 +1,11 @@
+[Unit]
+Description=vura: evening fallback nag
+
+[Timer]
+OnCalendar=*-*-* 19:00:00
+Persistent=true
+AccuracySec=1min
+Unit=vura-nag.service
+
+[Install]
+WantedBy=timers.target

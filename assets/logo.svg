@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- vura: a pocket watch whose hands make a V -->
+  <defs>
+    <clipPath id="face"><circle cx="64" cy="70" r="44"/></clipPath>
+  </defs>
+  <!-- crown and bow -->
+  <rect x="58" y="10" width="12" height="9" rx="2" fill="#1a6b67"/>
+  <rect x="55" y="16" width="18" height="6" rx="2" fill="#1a6b67"/>
+  <path d="M64 5 a7 7 0 1 1 -0.01 0" fill="none" stroke="#1a6b67" stroke-width="3"/>
+  <!-- case -->
+  <circle cx="64" cy="70" r="52" fill="#1a6b67"/>
+  <circle cx="64" cy="70" r="46" fill="#f6f8f9"/>
+  <circle cx="64" cy="70" r="46" fill="none" stroke="#dbe3e8" stroke-width="1"/>
+  <!-- hour ticks -->
+  <g stroke="#1a6b67" stroke-linecap="round" clip-path="url(#face)">
+    <g id="t"><line x1="64" y1="28" x2="64" y2="35" stroke-width="3.2"/></g>
+    <use href="#t" transform="rotate(30 64 70)" stroke-width="2"/>
+    <use href="#t" transform="rotate(60 64 70)"/>
+    <use href="#t" transform="rotate(90 64 70)"/>
+    <use href="#t" transform="rotate(120 64 70)"/>
+    <use href="#t" transform="rotate(150 64 70)"/>
+    <use href="#t" transform="rotate(180 64 70)"/>
+    <use href="#t" transform="rotate(210 64 70)"/>
+    <use href="#t" transform="rotate(240 64 70)"/>
+    <use href="#t" transform="rotate(270 64 70)"/>
+    <use href="#t" transform="rotate(300 64 70)"/>
+    <use href="#t" transform="rotate(330 64 70)"/>
+  </g>
+  <!-- the V: two hands from ten-to and two-past, meeting at the pivot -->
+  <path d="M44 46 L64 88 L84 46" fill="none" stroke="#0f161b" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 46 L64 88 L84 46" fill="none" stroke="#1a6b67" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- pivot -->
+  <circle cx="64" cy="88" r="5" fill="#0f161b"/>
+  <circle cx="64" cy="88" r="2.2" fill="#f6f8f9"/>
+</svg>

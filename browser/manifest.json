@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "vura browser heartbeats",
+  "version": "1.1",
+  "description": "Sends the active tab's domain to the local vura daemon once a minute. Nothing leaves the machine.",
+  "permissions": [
+    "tabs",
+    "alarms",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:4242/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "128": "icon.png"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  }
+}

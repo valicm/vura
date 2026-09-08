@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- top-bar version: single colour, transparent background, heavier strokes -->
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="56" y="12" width="16" height="10" rx="2" fill="#ffffff" stroke="none"/>
+    <circle cx="64" cy="72" r="46" stroke-width="9"/>
+    <path d="M42 48 L64 92 L86 48" stroke-width="12"/>
+  </g>
+</svg>

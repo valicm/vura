@@ -1,0 +1,11 @@
+[Unit]
+Description=vura: 10:00 nag, after the standup
+
+[Timer]
+OnCalendar=*-*-* 10:00:00
+# The machine is often off or asleep at 10:00; fire on next boot instead of skipping.
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

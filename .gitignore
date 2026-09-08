@@ -1,0 +1,6 @@
+/bin/
+/.idea/
+*.db
+*.db-shm
+*.db-wal
+config.*.toml

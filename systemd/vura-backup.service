@@ -1,0 +1,6 @@
+[Unit]
+Description=vura: nightly database backup
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/vura backup

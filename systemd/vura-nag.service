@@ -1,0 +1,6 @@
+[Unit]
+Description=vura: notify about pending days
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/vura nag

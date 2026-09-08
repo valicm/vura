@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vura</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<style>
+:root {
+  color-scheme: light dark;
+  --paper:#f4f7f8; --surface:#ffffff; --surface-2:#e9eff1; --rule:#d5dfe3;
+  --text:#18232b; --muted:#5c6d79; --ghost:#98a8b1;
+  --accent:#1a6b67; --accent-soft:#dfeeec; --warn:#9d5c14; --warn-soft:#f6ead8;
+  --stop:#9b3232; --ok:#2b6b3f;
+  --b0:#1a6b67; --b1:#7a4fa3; --b2:#b8651b; --b3:#2f6fa8; --b4:#8a2e5e; --b5:#5b7a1f; --b6:#6b6b6b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#0d1317; --surface:#151e24; --surface-2:#1c272e; --rule:#28363e;
+    --text:#dde6ec; --muted:#93a5b0; --ghost:#5f717c;
+    --accent:#5cbdb5; --accent-soft:#143231; --warn:#d99a4e; --warn-soft:#2c2113;
+    --stop:#e08585; --ok:#6fbf88;
+    --b0:#5cbdb5; --b1:#b596dc; --b2:#e59a55; --b3:#79aee0; --b4:#d47aa8; --b5:#a3c65a; --b6:#9a9a9a;
+  }
+}
+*,*::before,*::after { box-sizing:border-box; }
+html,body { margin:0; background:var(--paper); color:var(--text);
+  font:14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.mono { font-family: ui-monospace, "JetBrains Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+a { color:var(--accent); }
+header { display:flex; align-items:baseline; gap:18px; padding:14px 22px; border-bottom:1px solid var(--rule); background:var(--surface); flex-wrap:wrap; }
+header h1 { margin:0; font-size:18px; letter-spacing:-.01em; }
+header h1 span { color:var(--muted); font-weight:400; margin-left:8px; font-size:13px; }
+.stat { display:flex; gap:6px; align-items:baseline; color:var(--muted); font-size:13px; }
+.stat b { color:var(--text); font-weight:600; font-size:15px; }
+.chip { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600; background:var(--surface-2); color:var(--muted); }
+.chip.pending { background:var(--warn-soft); color:var(--warn); }
+.chip.done { background:var(--accent-soft); color:var(--accent); }
+.chip.today { background:var(--surface-2); color:var(--text); }
+.spacer { flex:1; }
+main { display:grid; grid-template-columns: 330px 1fr; gap:22px; padding:22px; max-width:1500px; margin:0 auto; }
+@media (max-width:980px) { main { grid-template-columns:1fr; } }
+section h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 10px; font-weight:600; }
+.card { background:var(--surface); border:1px solid var(--rule); border-radius:10px; }
+/* week */
+.week { display:flex; flex-direction:column; }
+.dayrow { display:grid; grid-template-columns:52px 1fr 64px; gap:10px; align-items:center; padding:9px 12px; border-top:1px solid var(--rule); cursor:pointer; }
+.dayrow:first-child { border-top:0; }
+.dayrow:hover { background:var(--surface-2); }
+.dayrow.sel { background:var(--accent-soft); }
+.dayrow .d { font-size:12px; color:var(--muted); line-height:1.2; }
+.dayrow .d b { display:block; color:var(--text); font-size:13px; }
+.bar { display:flex; height:14px; border-radius:4px; overflow:hidden; background:var(--surface-2); }
+.bar i { display:block; height:100%; }
+.dayrow .t { text-align:right; font-weight:600; }
+.dayrow .sub { grid-column:2 / 4; font-size:11.5px; color:var(--muted); display:flex; gap:10px; flex-wrap:wrap; }
+.dot { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; vertical-align:middle; }
+/* day */
+.dayhead { display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; padding:14px 16px 6px; }
+.dayhead h3 { margin:0; font-size:17px; }
+.legend { display:flex; gap:12px; flex-wrap:wrap; padding:0 16px 10px; font-size:12px; color:var(--muted); }
+svg.tl { display:block; width:100%; height:auto; }
+.tl text { fill:var(--muted); font-size:10px; font-family: ui-monospace, Menlo, monospace; }
+.tl .grid { stroke:var(--rule); stroke-width:1; }
+.tl .lane { fill:var(--surface-2); }
+.tl .now { stroke:var(--stop); stroke-width:1; stroke-dasharray:3 3; }
+.tl .meet { fill:none; stroke-width:1.5; }
+.tl .anchor { stroke-width:1.5; }
+table { width:100%; border-collapse:collapse; font-size:13.5px; }
+th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 12px; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); background:var(--surface-2); }
+td { padding:9px 12px; border-top:1px solid var(--rule); vertical-align:top; }
+td.n { color:var(--ghost); }
+td.h { text-align:right; white-space:nowrap; }
+td .detail { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+td .desc { display:block; margin-top:3px; }
+td .desc.auto { color:var(--muted); }
+.flag { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; margin-left:6px; background:var(--surface-2); color:var(--muted); }
+.flag.remote { background:var(--accent-soft); color:var(--accent); }
+.flag.need { background:var(--warn-soft); color:var(--warn); }
+.flag.round { color:var(--warn); }
+.issue { font-weight:600; }
+.bottom { grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+@media (max-width:980px) { .bottom { grid-template-columns:1fr; } }
+.list { padding:6px 0; }
+.row { display:grid; grid-template-columns:1fr auto; gap:12px; padding:7px 14px; border-top:1px solid var(--rule); font-size:13px; }
+.row:first-child { border-top:0; }
+.row .k { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; margin-right:8px; }
+.age { color:var(--muted); }
+.age.stale { color:var(--warn); font-weight:600; }
+.age.dead { color:var(--stop); font-weight:600; }
+.empty { padding:16px; color:var(--muted); }
+.actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 16px; border-top:1px solid var(--rule); background:var(--surface-2); }
+button { font:inherit; font-size:13px; padding:5px 11px; border-radius:6px; border:1px solid var(--rule); background:var(--surface); color:var(--text); cursor:pointer; }
+button:hover { border-color:var(--muted); }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+button.danger { color:var(--stop); }
+button:disabled { opacity:.5; cursor:default; }
+button.sm { font-size:11.5px; padding:2px 7px; }
+input, select { font:inherit; font-size:13px; padding:4px 7px; border-radius:6px; border:1px solid var(--rule); background:var(--surface); color:var(--text); }
+input.dur { width:64px; }
+input.text { width:100%; }
+.rowtools { display:flex; gap:5px; flex-wrap:wrap; margin-top:6px; align-items:center; }
+.rowtools select { font-size:12px; padding:2px 5px; }
+td.sel { width:26px; }
+tr.selected td { background:var(--accent-soft); }
+.msg { padding:8px 16px; font-size:13px; border-top:1px solid var(--rule); }
+.msg.err { color:var(--stop); }
+.msg.ok { color:var(--ok); }
+.push { font-size:13px; }
+.push td { padding:5px 12px; }
+.noteform { display:flex; gap:6px; flex-wrap:wrap; align-items:center; padding:8px 16px; border-top:1px solid var(--rule); font-size:13px; }
+.noteform input.text { width:260px; }
+dialog { border:1px solid var(--rule); border-radius:10px; background:var(--surface); color:var(--text); padding:18px 20px; max-width:560px; }
+dialog::backdrop { background:rgba(0,0,0,.35); }
+dialog h4 { margin:0 0 8px; }
+dialog .btns { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+footer { padding:10px 22px 30px; color:var(--ghost); font-size:12px; text-align:center; }
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><img src="/favicon.png" alt="" width="22" height="22" style="vertical-align:-5px;margin-right:6px">vura <span id="version"></span></h1>
+  <div class="stat"><span>today</span> <b id="h-observed">–</b> <span>observed</span></div>
+  <div class="stat"><b id="h-logged">–</b> <span>logged</span></div>
+  <div class="stat" id="h-gain"></div>
+  <div class="spacer"></div>
+  <span class="chip" id="h-pending"></span>
+</header>
+<main>
+  <section>
+    <h2>Working days</h2>
+    <div class="card week" id="week"></div>
+  </section>
+  <section>
+    <h2>Day</h2>
+    <div class="card" id="day"><div class="empty">Loading…</div></div>
+  </section>
+  <div class="bottom">
+    <section>
+      <h2>Unmapped this week — a rule would claim these</h2>
+      <div class="card list" id="cues"></div>
+    </section>
+    <section>
+      <h2>Collectors</h2>
+      <div class="card list" id="health"></div>
+    </section>
+  </div>
+</main>
+<footer>Edits are saved as you make them and replayed on the evidence until you accept, skip or reset the day.</footer>
+<dialog id="dlg"><h4 id="dlg-title"></h4><div id="dlg-body"></div><div class="btns"><button id="dlg-cancel">Cancel</button><button id="dlg-ok" class="primary">Confirm</button></div></dialog>
+<script>
+const $ = s => document.querySelector(s);
+const hm = s => { s = Math.round(s/60); if (!s) return '–'; const h = Math.floor(s/60), m = s%60; return h ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m`; };
+const t = iso => new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let selected = null, bucketColor = {}, bucketMeta = {};
+function colorFor(b) {
+  if (b === '' || b == null) return 'var(--ghost)';
+  if (b === '?') return 'var(--warn)';
+  if (b === 'call') return 'var(--stop)';
+  if (!(b in bucketColor)) bucketColor[b] = `var(--b${Object.keys(bucketColor).length % 7})`;
+  return bucketColor[b];
+}
+function labelFor(b, fallback) { return (bucketMeta[b] && bucketMeta[b].label) || fallback || b; }
+
+async function loadOverview() {
+  const r = await fetch('/api/vura/overview?days=10'); const o = await r.json();
+  const today = o.days.find(d => d.state === 'today');
+  if (today) {
+    $('#h-observed').textContent = hm(today.observed); $('#h-logged').textContent = hm(today.logged);
+    const g = today.logged - today.observed; $('#h-gain').innerHTML = g > 0 ? `<span>rounding</span> <b>+${hm(g)}</b>` : '';
+  }
+  const max = Math.max(1, ...o.days.map(d => d.observed + d.unattributed));
+  $('#week').innerHTML = o.days.map(d => {
+    const segs = d.buckets.map(b => `<i style="width:${100*b.observed/max}%;background:${colorFor(b.bucket)}" title="${esc(labelFor(b.bucket,b.label))} ${hm(b.observed)}"></i>`).join('')
+      + (d.unattributed ? `<i style="width:${100*d.unattributed/max}%;background:var(--rule)" title="unattributed ${hm(d.unattributed)}"></i>` : '');
+    const chips = d.buckets.map(b => `<span><span class="dot" style="background:${colorFor(b.bucket)}"></span>${esc(labelFor(b.bucket,b.label))} ${hm(b.observed)}${b.remote?' ⇡':''}</span>`).join('');
+    const state = d.state ? `<span class="chip ${d.state}">${d.state}</span>` : '';
+    return `<div class="dayrow ${d.day===selected?'sel':''}" data-day="${d.day}">
+      <div class="d"><b>${d.weekday}</b>${d.day.slice(5)}</div>
+      <div class="bar">${segs}</div>
+      <div class="t mono">${hm(d.observed)}</div>
+      <div class="sub">${chips}${state}</div></div>`;
+  }).join('');
+  document.querySelectorAll('.dayrow').forEach(el => el.onclick = () => { selected = el.dataset.day; loadOverview(); loadDay(); });
+  if (!selected) { selected = o.today; loadDay(); document.querySelector(`.dayrow[data-day="${selected}"]`)?.classList.add('sel'); }
+}
+
+let selectedKeys = new Set(), dayData = null;
+async function api(path, body) {
+  const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json','X-Vura':'1'}, body: JSON.stringify(body||{})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function note(text, cls) { const m = $('#msg'); if (!m) return; m.textContent = text; m.className = 'msg ' + (cls||''); }
+async function doOp(body) {
+  try { await api(`/api/vura/day/${selected}/op`, body); selectedKeys.clear(); await loadDay(); await loadOverview(); }
+  catch (e) { note(e.message, 'err'); }
+}
+function confirmDlg(title, html) {
+  return new Promise(res => {
+    const dlg = $('#dlg'); $('#dlg-title').textContent = title; $('#dlg-body').innerHTML = html;
+    const done = v => { dlg.close(); $('#dlg-ok').onclick = $('#dlg-cancel').onclick = null; res(v); };
+    $('#dlg-ok').onclick = () => done(true); $('#dlg-cancel').onclick = () => done(false); dlg.showModal();
+  });
+}
+const pushTable = lines => lines.length ? `<table class="push">${lines.map(l => `<tr><td class="mono">${t(l.start)}</td><td class="issue">${esc(l.issue)}</td><td class="h mono">${hm(l.seconds)}</td><td>${esc(l.desc)}</td><td>${l.error ? `<span class="flag need">${esc(l.error)}</span>` : l.tempoId ? `<span class="chip done">#${esc(l.tempoId)}</span>` : ''}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing to push.</div>';
+async function decide(action) {
+  try {
+    if (action === 'dryrun') { const r = await api(`/api/vura/day/${selected}/decide`, {action}); await confirmDlg('Would push to Tempo', pushTable(r.wouldPush||[]) + (r.blocking ? `<p class="flag need">${r.blocking} entries still need a decision</p>` : '')); return; }
+    if (action === 'accept') {
+      const r = await api(`/api/vura/day/${selected}/decide`, {action:'dryrun'});
+      if (!(await confirmDlg('Push these worklogs to Tempo?', pushTable(r.wouldPush||[])))) return;
+    }
+    if (action === 'skip' && !(await confirmDlg('Skip this day?', '<p>Nothing will be logged for it. It leaves the queue.</p>'))) return;
+    if (action === 'amend' && !(await confirmDlg('Amend this day?', '<p>Its worklogs are deleted from Tempo and the day reopens for editing. Each deletion is audited.</p>'))) return;
+    if (action === 'reset' && !(await confirmDlg('Discard edits?', '<p>The day goes back to what the evidence says.</p>'))) return;
+    const r = action === 'reset' ? await api(`/api/vura/day/${selected}/reset`) : await api(`/api/vura/day/${selected}/decide`, {action});
+    if (r.pushed) note(r.failed ? `${r.failed} worklogs failed; retry with vura push ${selected}` : `pushed ${r.pushed.length} worklogs`, r.failed ? 'err' : 'ok');
+    if (r.error) note(r.error, 'err');
+    await loadDay(); await loadOverview(); await loadHealth();
+  } catch (e) { note(e.message, 'err'); }
+}
+
+async function loadDay() {
+  const r = await fetch('/api/vura/day/' + selected); const d = await r.json(); dayData = d;
+  bucketMeta = d.buckets || {};
+  const editable = !d.today && d.state !== 'done' && !d.partial;
+  const gain = d.logged - d.observed;
+  const buckets = Object.keys(bucketMeta).sort();
+  const opts = sel => buckets.map(b => `<option value="${b}" ${b===sel?'selected':''}>${esc(bucketMeta[b].issue)} ${esc(bucketMeta[b].label||b)}</option>`).join('');
+  const head = `<div class="dayhead"><h3>${esc(d.title)}</h3>
+    ${d.wallStart ? `<span class="stat"><span>wall</span> <b class="mono">${t(d.wallStart)}–${t(d.wallEnd)}</b></span>` : ''}
+    <span class="stat"><b>${hm(d.observed)}</b> <span>observed</span></span>
+    <span class="stat"><b>${hm(d.logged)}</b> <span>logged</span></span>
+    ${gain > 0 ? `<span class="stat"><span>rounding</span> <b>+${hm(gain)}</b></span>` : ''}
+    ${d.state ? `<span class="chip ${d.state}">${d.state}</span>` : d.today ? '<span class="chip today">collecting</span>' : '<span class="chip pending">pending</span>'}
+    ${d.blocking ? `<span class="chip pending">${d.blocking} need a decision</span>` : ''}
+    ${d.edits ? `<span class="chip">${d.edits} edit${d.edits>1?'s':''}</span>` : ''}
+    ${d.editsSkipped ? `<span class="chip pending">${d.editsSkipped} edit${d.editsSkipped>1?'s':''} no longer apply</span>` : ''}</div>`;
+  const rows = d.entries.map(e => {
+    const need = e.bucket === '' && e.kind !== 'presence';
+    const flags = (e.remote ? '<span class="flag remote">remote</span>' : '')
+      + (e.identity ? '<span class="flag">moments only</span>' : '')
+      + (need ? '<span class="flag need">assign or drop</span>' : '')
+      + (!e.identity && e.observed && e.logged > e.observed ? `<span class="flag round">${hm(e.observed)}→${hm(e.logged)}</span>` : '');
+    const who = e.bucket ? `<span class="issue">${esc(e.issue)}</span> ${esc(labelFor(e.bucket, e.label))}` : `<span style="color:var(--muted)">${esc(e.label)}</span>`;
+    const tools = editable ? `<div class="rowtools">
+        <select data-k="${esc(e.key)}" class="assign"><option value="">${e.bucket ? 'move to…' : 'assign to…'}</option>${opts('')}</select>
+        <input class="dur" data-k="${esc(e.key)}" placeholder="${e.identity ? 'time' : hm(e.logged)}" title="logged time, e.g. 1h30m">
+        <input class="text" style="width:auto;flex:1;min-width:160px" data-k="${esc(e.key)}" placeholder="description" value="${esc(e.bucket ? e.desc : '')}" ${e.bucket?'':'disabled'}>
+        ${e.bucket ? `<button class="sm claude" data-k="${esc(e.key)}" title="ask Claude to word it">✨</button>` : ''}
+        <button class="sm danger drop" data-k="${esc(e.key)}">drop</button></div>` : '';
+    return `<tr class="${selectedKeys.has(e.key)?'selected':''}"><td class="sel">${editable ? `<input type="checkbox" class="pick" data-k="${esc(e.key)}" ${selectedKeys.has(e.key)?'checked':''} ${e.bucket===''?'disabled':''}>` : `<span class="n mono">${e.n}</span>`}</td>
+      <td><span class="dot" style="background:${colorFor(e.bucket || (e.kind==='call'?'call':e.kind==='unmapped'?'?':''))}"></span>${who}${flags}
+        ${e.detail ? `<span class="detail">${esc(e.detail)}</span>` : ''}
+        ${!editable && e.bucket && e.desc ? `<span class="desc ${e.auto?'auto':''}">“${esc(e.desc)}”</span>` : ''}${tools}</td>
+      <td class="mono" style="white-space:nowrap">${t(e.start)}–${t(e.end)}</td>
+      <td class="h mono">${e.identity ? '0m' : hm(e.logged)}</td></tr>`;
+  }).join('');
+  const meet = (d.meetings||[]).map(m => `<span><span class="dot" style="background:transparent;border:1.5px solid ${colorFor(m.bucket)}"></span>${t(m.start)} ${esc(m.title)}</span>`).join('');
+  const wlRows = (d.worklogs||[]).map(w => `<tr><td class="mono">${t(w.start)}</td><td class="issue">${esc(w.issue)}</td>
+      <td class="h mono">${w.state==='pushed' ? hm(w.seconds) : `<input class="dur wl-dur" data-id="${w.id}" value="${hm(w.seconds)}">`}</td>
+      <td>${w.state==='pushed' ? esc(w.desc) : `<input class="text wl-text" data-id="${w.id}" value="${esc(w.desc)}">`}${w.error ? `<span class="detail" style="color:var(--stop)">${esc(w.error)}</span>` : ''}</td>
+      <td style="white-space:nowrap">${w.state==='pushed' ? `<span class="chip done">#${esc(w.tempoId)}</span>` : `<span class="chip pending">${w.state}</span> <button class="sm wl-retry" data-id="${w.id}">retry</button> <button class="sm danger wl-del" data-id="${w.id}">discard</button>`}</td></tr>`).join('');
+  const wl = (d.worklogs||[]).length ? `<h2 style="padding:14px 16px 0">Worklogs</h2><table class="push">${wlRows}</table>` : '';
+  const nsel = selectedKeys.size;
+  const actions = editable ? `<div class="noteform"><span class="k" style="color:var(--muted)">NOTE</span><select id="note-b">${opts('')}</select><input class="dur" id="note-d" placeholder="1h"><input class="text" id="note-t" placeholder="work nothing observed (phone call, whiteboard)"><button id="note-add" class="sm">add</button></div>
+    <div class="actions">
+      <button id="act-merge" ${nsel<2?'disabled':''}>Merge ${nsel>1?nsel+' selected':'selected'}</button>
+      <button id="act-claude">✨ Describe all</button>
+      <span class="spacer"></span>
+      <button id="act-reset" ${d.edits?'':'disabled'}>Reset edits</button>
+      <button id="act-dry">Dry run</button>
+      <button id="act-skip" class="danger">Skip day</button>
+      <button id="act-accept" class="primary" ${d.blocking?'disabled':''}>Accept & push</button></div><div class="msg" id="msg"></div>`
+    : d.partial ? `<div class="actions"><span style="color:var(--muted)">Partly in Tempo. Fix the time or wording of a failed worklog and retry it, or discard it. The day settles when every worklog is in.</span><span class="spacer"></span><button id="act-amend" class="danger">Amend all</button><button id="act-retry" class="primary">Retry failed</button></div><div class="msg" id="msg"></div>`
+    : d.today ? `<div class="actions"><span style="color:var(--muted)">Today is still collecting. Edits open after 03:00.</span><span class="spacer"></span><button id="act-dry">Dry run</button></div><div class="msg" id="msg"></div>`
+    : `<div class="actions"><span style="color:var(--muted)">Done. ${(d.worklogs||[]).length} worklogs in Tempo.</span><span class="spacer"></span><button id="act-amend" class="danger">Amend</button></div><div class="msg" id="msg"></div>`;
+  $('#day').innerHTML = head + timeline(d) + (meet ? `<div class="legend">${meet}</div>` : '')
+    + (d.partial || d.state === 'done' ? '' : d.entries.length ? `<table><tr><th></th><th>Session</th><th>Time</th><th style="text-align:right">Logged</th></tr>${rows}</table>` : '<div class="empty">Nothing observed.</div>') + wl + actions;
+  // wire
+  document.querySelectorAll('.pick').forEach(cb => cb.onchange = () => { cb.checked ? selectedKeys.add(cb.dataset.k) : selectedKeys.delete(cb.dataset.k); loadDay(); });
+  document.querySelectorAll('.assign').forEach(sel => sel.onchange = () => sel.value && doOp({op:'assign', target: sel.dataset.k, bucket: sel.value}));
+  document.querySelectorAll('input.dur[data-k]').forEach(inp => inp.onchange = () => inp.value.trim() && doOp({op:'logged', target: inp.dataset.k, dur: inp.value.trim()}));
+  document.querySelectorAll('input.text[data-k]').forEach(inp => inp.onchange = () => doOp({op:'desc', target: inp.dataset.k, text: inp.value}));
+  document.querySelectorAll('.drop').forEach(b => b.onclick = () => doOp({op:'drop', target: b.dataset.k}));
+  document.querySelectorAll('.claude').forEach(b => b.onclick = () => { note('asking Claude…'); doOp({op:'claude', target: b.dataset.k}); });
+  const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
+  on('#act-merge', () => { const ks = [...selectedKeys]; doOp({op:'merge', target: ks[0], others: ks.slice(1)}); });
+  on('#act-claude', () => { note('asking Claude for every auto-described entry…'); doOp({op:'claude', all:true}); });
+  on('#act-reset', () => decide('reset')); on('#act-dry', () => decide('dryrun')); on('#act-skip', () => decide('skip'));
+  on('#act-accept', () => decide('accept')); on('#act-amend', () => decide('amend'));
+  const wlOp = async body => { try { await api(`/api/vura/day/${selected}/worklog`, body); await loadDay(); await loadOverview(); await loadHealth(); } catch (e) { note(e.message, 'err'); } };
+  on('#act-retry', () => { note('retrying…'); wlOp({op:'retry-all'}); });
+  document.querySelectorAll('.wl-retry').forEach(b => b.onclick = () => { note('retrying…'); wlOp({op:'retry', id:+b.dataset.id}); });
+  document.querySelectorAll('.wl-del').forEach(b => b.onclick = async () => { if (await confirmDlg('Discard this worklog?', '<p>It will not be logged. The day settles once every other worklog is in Tempo.</p>')) wlOp({op:'delete', id:+b.dataset.id}); });
+  document.querySelectorAll('.wl-dur').forEach(i => i.onchange = () => wlOp({op:'update', id:+i.dataset.id, dur:i.value.trim()}));
+  document.querySelectorAll('.wl-text').forEach(i => i.onchange = () => wlOp({op:'update', id:+i.dataset.id, text:i.value}));
+  on('#note-add', () => { const b = $('#note-b').value, dur = $('#note-d').value.trim(), text = $('#note-t').value.trim(); if (b && dur) doOp({op:'note', bucket:b, dur, text}); });
+}
+
+function timeline(d) {
+  const W = 1000, padL = 8, padR = 8, laneH = 18, gap = 4, top = 18;
+  const x0 = new Date(d.dayStart).getTime(), x1 = new Date(d.dayEnd).getTime();
+  const X = ms => padL + (W - padL - padR) * (ms - x0) / (x1 - x0);
+  const lanes = []; const laneOf = {};
+  const key = e => e.bucket || (e.kind === 'call' ? 'call' : e.kind === 'unmapped' ? '?' : '');
+  d.entries.forEach(e => { const k = key(e); if (!(k in laneOf)) { laneOf[k] = lanes.length; lanes.push(k); } });
+  if ((d.meetings||[]).length) { laneOf['__meet'] = lanes.length; lanes.push('__meet'); }
+  if ((d.anchors||[]).length) { laneOf['__anchor'] = lanes.length; lanes.push('__anchor'); }
+  const H = top + lanes.length * (laneH + gap) + 8;
+  let s = `<svg class="tl" viewBox="0 0 ${W} ${H}" role="img" aria-label="timeline">`;
+  for (let ms = x0; ms <= x1; ms += 2*3600e3) {
+    const x = X(ms); s += `<line class="grid" x1="${x}" y1="${top-4}" x2="${x}" y2="${H-6}"/><text x="${x+3}" y="${top-7}">${t(new Date(ms).toISOString())}</text>`;
+  }
+  lanes.forEach((k, i) => {
+    const y = top + i * (laneH + gap);
+    s += `<rect class="lane" x="${padL}" y="${y}" width="${W-padL-padR}" height="${laneH}" rx="3"/>`;
+    const name = k === '__meet' ? 'meetings' : k === '__anchor' ? 'external' : k === '' ? 'unattributed' : k === '?' ? 'unmapped' : k === 'call' ? 'call' : labelFor(k, k);
+    s += `<text x="${padL+4}" y="${y+12.5}" style="fill:var(--text);font-size:10px;opacity:.7">${esc(name)}</text>`;
+  });
+  d.entries.forEach(e => {
+    const y = top + laneOf[key(e)] * (laneH + gap);
+    const a = X(new Date(e.start).getTime()), b = Math.max(X(new Date(e.end).getTime()), a + 2);
+    const col = colorFor(key(e));
+    s += `<rect x="${a}" y="${y+2}" width="${b-a}" height="${laneH-4}" rx="2" fill="${col}" opacity="${e.identity?0.35:0.85}"><title>${esc(labelFor(e.bucket,e.label))} ${t(e.start)}–${t(e.end)} ${e.identity?'moments only':hm(e.observed)}</title></rect>`;
+  });
+  (d.meetings||[]).forEach(m => {
+    const y = top + laneOf['__meet'] * (laneH + gap);
+    const a = X(new Date(m.start).getTime()), b = Math.max(X(new Date(m.end).getTime()), a + 2);
+    s += `<rect class="meet" x="${a}" y="${y+2}" width="${b-a}" height="${laneH-4}" rx="2" stroke="${colorFor(m.bucket)}"><title>${esc(m.title)} ${t(m.start)}–${t(m.end)}</title></rect>`;
+  });
+  (d.anchors||[]).forEach(a => {
+    const y = top + laneOf['__anchor'] * (laneH + gap);
+    const x = X(new Date(a.ts).getTime());
+    s += `<line class="anchor" x1="${x}" y1="${y+3}" x2="${x}" y2="${y+laneH-3}" stroke="var(--muted)"><title>${esc(a.source)} ${esc(a.kind)} ${esc(a.ref)}${a.title?': '+esc(a.title):''} ${t(a.ts)}</title></line>`;
+  });
+  const now = Date.now(); if (now > x0 && now < x1) s += `<line class="now" x1="${X(now)}" y1="${top-4}" x2="${X(now)}" y2="${H-6}"/>`;
+  return s + '</svg>';
+}
+
+async function loadCues() {
+  const r = await fetch('/api/vura/cues'); const c = await r.json();
+  const rows = (c.cues||[]).slice(0, 40).map(x => `<div class="row"><span><span class="k">${x.kind}</span>${esc(x.name)}</span><span class="mono age">${x.kind==='slack'?x.minutes+' msgs':x.kind==='meeting'?x.minutes+'m':hm(x.minutes*60)}</span></div>`).join('');
+  $('#cues').innerHTML = rows || '<div class="empty">Everything seen this week has a bucket.</div>';
+}
+async function loadHealth() {
+  const r = await fetch('/api/vura/health'); const h = await r.json();
+  $('#version').textContent = h.version;
+  $('#h-pending').textContent = h.pending ? `${h.pending} day${h.pending>1?'s':''} pending` : 'queue empty';
+  $('#h-pending').className = 'chip ' + (h.pending ? 'pending' : 'done');
+  const age = a => a < 0 ? '<span class="age dead">never</span>' : a < 600 ? `<span class="age">${Math.round(a/60)}m ago</span>` : a < 7200 ? `<span class="age stale">${Math.round(a/60)}m ago</span>` : `<span class="age dead">${Math.round(a/3600)}h ago</span>`;
+  const rows = h.evidence.map(e => `<div class="row"><span><span class="k">evidence</span>${esc(e.name)}</span>${age(e.age)}</div>`).join('')
+    + h.collectors.map(c => `<div class="row"><span><span class="k">collector</span>${esc(c.name)}</span>${age(c.age)}</div>`).join('');
+  $('#health').innerHTML = rows;
+}
+function refresh() { loadOverview(); if (selected && !document.activeElement.matches('input, select')) loadDay(); loadCues(); loadHealth(); }
+refresh(); setInterval(refresh, 60000);
+document.addEventListener('keydown', e => {
+  if (!selected || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+  const days = [...document.querySelectorAll('.dayrow')].map(x => x.dataset.day);
+  const i = days.indexOf(selected) + (e.key === 'ArrowLeft' ? 1 : -1);
+  if (i >= 0 && i < days.length) { selected = days[i]; loadOverview(); loadDay(); }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+# vura configuration. Copy to ~/.config/vura/config.toml and edit the
+# [identity] and [buckets.*] blocks; everything else has sensible defaults.
+#
+# Attribution is the whole model: each bucket is one Tempo issue that receives
+# hours, and each bucket lists the evidence that belongs to it. Rules are
+# substrings (or path prefixes for repos), read at build time, so a rule
+# added today re-attributes past days on the next `vura day`.
+
+[day]
+# first        = "2026-01-01"  # reconcile queue starts here (default: the day vurad first ran)
+boundary      = "03:00"        # work past midnight files under the previous day
+active_window = "08:00-01:00"  # inside this, evidence overrides an idle keyboard
+reconcile_at  = "10:00"        # documentation only; the nag timer is in systemd/
+nag_days      = 4              # how far back the 10:00 notification counts pending days
+min_day       = "20m"          # below this with no commits, a day auto-skips
+max_wall      = 16             # sanity ceiling on wall-clock span (hours)
+
+[session]
+idle_gap      = "30m"          # a longer silence between evidence closes a session
+away_after    = "10m"          # keyboard idle past this, with nothing running, closes it at last input
+detect_min    = "5m"           # shorter sessions are noise
+round_min     = "15m"          # survivors round up to this when logged; observed is kept
+max_entry     = "4h30m"        # longer worklogs are split
+allow_overlap = true           # two clients in the same minute are both real
+
+[sources]
+atuin          = "~/.local/share/atuin/history.db"   # read-only; needs bash-preexec on bash
+listen         = "127.0.0.1:4242"                    # WakaTime endpoint: api_url = http://127.0.0.1:4242/api
+wakatime_key   = ""            # set to api_key from ~/.wakatime.cfg to require it; empty accepts all
+gnome          = true          # mutter IdleMonitor + gnome-session inhibitors
+audio          = true          # PipeWire capture streams = calls
+tray           = true          # top-bar indicator; GNOME needs the AppIndicator extension
+presence_every = "60s"
+audio_every    = "120s"
+shell_every    = "60s"
+git_every      = "1h"
+git_since      = "336h"        # commits rewritten inside this window are pruned
+shell_denylist = ["pass", "gpg", "gpg2", "ssh-add", "op", "bw", "vault", "gopass", "keepassxc-cli"]
+meeting_domains = ["meet.google.com", "teams.microsoft.com", "teams.live.com", "zoom.us", "whereby.com", "meet.jit.si"]
+
+[calendar]
+every = "1h"                   # every feed; events 30 days back, 7 ahead
+# One feed per calendar. Proton: calendar settings > Share > "Share with anyone".
+# Google: Settings > the calendar > Integrate calendar > "Secret address in iCal format".
+# A feed's `bucket` is the fallback for events no title/attendee rule claims,
+# which is right for a client workspace's own calendar. Keep secret URLs private.
+#[[calendar.feeds]]
+#name = "personal"
+#url  = "https://calendar.proton.me/api/calendar/v1/url/.../calendar.ics?CacheKey=...&PassphraseKey=..."
+#[[calendar.feeds]]
+#name   = "acme"
+#url    = "https://calendar.google.com/calendar/ical/you%40acme.example/private-.../basic.ics"
+#bucket = "ACME"
+
+[anchors]
+# External activity that leaves no local trace: PR reviews, MR approvals, ticket
+# comments, Slack messages. Anchors are moments and identity, never duration.
+# Tokens live in the keyring (or VURA_<NAME>_TOKEN env vars), never here:
+#   secret-tool store --label='vura github' service vura key github        # classic PAT, repo scope
+#   secret-tool store --label='vura gitlab' service vura key gitlab        # read_api scope
+#   secret-tool store --label='vura jira'   service vura key jira          # id.atlassian.com API token; one per account, works on every site
+#   secret-tool store --label='vura slack'  service vura key slack:work    # user token (xoxp-…), see below
+every  = "1h"
+since  = "72h"                 # look-back per fetch; a source that was dark catches up from its last success
+#github = "your-github-login"
+#gitlab = "https://gitlab.acme.example"   # self-hosted; fine behind a VPN, fetches wait for it
+#[[anchors.jira]]
+#site     = "acme.atlassian.net"
+#projects = ["ACME", "SHOP"]
+# Slack: your own messages (channel + time only, never text) and huddles as
+# meetings. User Token Scopes on a Slack app in that workspace: search:read;
+# for huddles also channels:read groups:read im:read mpim:read and the four
+# *:history scopes; users:read to name DM counterparts.
+#[[anchors.slack]]
+#name = "work"                 # label used in rules: "work#channel"
+
+[identity]
+emails    = ["you@example.com"]              # git author emails to collect commits for
+jira_site = "yoursite.atlassian.net"         # where the Tempo worklogs go
+# jira_email = "you@example.com"             # login for the Jira token; defaults to emails[0]
+timezone  = "Europe/Zagreb"
+# device  = "workstation"                    # defaults to hostname
+
+# --- buckets ------------------------------------------------------------------
+# One bucket per Tempo issue. Every list is optional. Matching:
+#   repos    path prefix (~ expands): cwd of commands, heartbeat file paths, repo of commits
+#   tickets  Jira project keys: a key in a branch name, subject or anchor wins over the repo
+#   domains  substring of a browser domain/URL or of "github.com/<owner>", "gitlab.host/<group>"
+#   calendar substring of a meeting title or attendee email
+#   slack    substring of "workspace#channel"; "work#" claims a whole workspace
+
+[buckets.ACME]
+issue    = "EXT-1"
+label    = "Acme"
+repos    = ["~/Development/acme-shop", "~/Development/acme-api"]
+tickets  = ["ACME", "SHOP"]
+domains  = ["acme.atlassian.net", "github.com/acme"]
+calendar = ["acme", "@acme.example"]
+slack    = ["work#acme", "work#dm-anna.smith"]
+
+[buckets.BETA]
+issue    = "EXT-2"
+label    = "Beta"
+repos    = ["~/Development/beta"]
+tickets  = ["BT"]
+domains  = ["gitlab.beta.example", "beta.example"]
+slack    = ["beta#"]                        # everything in Beta's own workspace
+
+[buckets.OTHER]
+issue    = "INT-1"
+label    = "Internal"
+repos    = ["~/Development/internal", "~/GolandProjects/vura"]
+domains  = ["github.com/yourorg"]
+slack    = ["work#general"]

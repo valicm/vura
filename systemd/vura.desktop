@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=vura
+Comment=Where the day went
+Exec=vura open
+Icon=vura
+Terminal=false
+Categories=Office;Utility;
+StartupWMClass=vura
