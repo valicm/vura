@@ -37,6 +37,15 @@ That builds a config and a database with one synthetic day in `/tmp/vura-demo`,
 then prints the environment variables to point `vura` at it. Your own config
 and data are untouched.
 
+<p align="center"><img src="assets/demo.gif" width="880" alt="terminal demo: vura demo, status, day, and a dry-run reconcile with a merge"></p>
+
+The same day in the dashboard, where the reconcile happens with a click
+(the recording is `assets/demo.cast` for asciinema):
+
+<p align="center"><img src="assets/dashboard.png" width="880" alt="dashboard: the week per bucket, one day as a timeline with sessions and evidence"></p>
+
+<p align="center"><img src="assets/dashboard.gif" width="880" alt="selecting two rows, merging them, and a dry run of what would be pushed"></p>
+
 ## How it flows
 
 ```mermaid

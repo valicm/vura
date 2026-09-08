@@ -34,7 +34,9 @@ func demoCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	_ = os.Remove(cfg.DBPath)
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		_ = os.Remove(cfg.DBPath + suffix)
+	}
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
 		return err
