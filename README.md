@@ -8,6 +8,12 @@
 
 <p align="center">A daemon that measures where your working day actually went, and a screen where you agree the worklogs before they reach Tempo.</p>
 
+<p align="center">The purpose of Vura is not to automate time tracking and time to be billed. The purpose is to make easier for you to reconcile the previous day with as maximum input possible.</p>
+
+
+<p align="center"> Vura had been built with Claude - Jean Claude Van Code (tm valicm - you heard this here first time) did good job in short time - let see it on longer period)
+<p align="center"><img src="assets/dashboard.png" width="880" alt="dashboard: the week per bucket, one day as a timeline with sessions and evidence"></p>
+
 ---
 
 vura is for a developer who bills several clients from one machine. It watches
@@ -41,8 +47,6 @@ and data are untouched.
 
 The same day in the dashboard, where the reconcile happens with a click
 (the recording is `assets/demo.cast` for asciinema):
-
-<p align="center"><img src="assets/dashboard.png" width="880" alt="dashboard: the week per bucket, one day as a timeline with sessions and evidence"></p>
 
 <p align="center"><img src="assets/dashboard.gif" width="880" alt="selecting two rows, merging them, and a dry run of what would be pushed"></p>
 
