@@ -21,7 +21,11 @@ away_after    = "10m"          # keyboard idle past this, with nothing running, 
 detect_min    = "5m"           # shorter sessions are noise
 round_min     = "15m"          # survivors round up to this when logged; observed is kept
 max_entry     = "4h30m"        # longer worklogs are split
-allow_overlap = true           # two clients in the same minute are both real
+evidence_timeout = "10m"       # a heartbeat or command keeps its bucket active this long
+overlap       = "parallel"     # parallel: your typing is one unit per minute, shared among the buckets you touch;
+                               #   work that runs on its own (Claude, calls, meetings, long commands) is a second
+                               #   unit, shared among those. Three Claude runs at once share one unit.
+                               # share: everything shares one unit; a day never exceeds the wall clock.
 
 [sources]
 atuin          = "~/.local/share/atuin/history.db"   # read-only; needs bash-preexec on bash

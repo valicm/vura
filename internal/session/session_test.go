@@ -18,7 +18,7 @@ func params() Params {
 		DayStart: at(3, 0), DayEnd: at(3, 0).AddDate(0, 0, 1),
 		IdleGap: 30 * time.Minute, AwayAfter: 10 * time.Minute, DetectMin: 5 * time.Minute,
 		PresentIdle: 5 * time.Minute, PresenceSpan: 5 * time.Minute,
-		ActiveStart: from, ActiveEnd: to,
+		ActiveStart: from, ActiveEnd: to, EvidenceTimeout: 10 * time.Minute,
 	}
 }
 
@@ -255,5 +255,65 @@ func TestCalendarOverlay(t *testing.T) {
 	web := beats(KindWeb, "BETA", "gitlab.beta.example", at(10, 0), at(10, 31), 1*time.Minute)
 	if f := find(Build(web, nil, p), "BETA"); len(f) != 1 || f[0].Duration() != 30*time.Minute {
 		t.Errorf("web: %+v", f)
+	}
+}
+
+func TestSharingAcrossBuckets(t *testing.T) {
+	p := params()
+	// Round-robin: three projects touched every two minutes for an hour each,
+	// interleaved. Spans all cover the hour; shares add up to the hour.
+	var ev []Evidence
+	for i := 0; i < 30; i++ {
+		b := []string{"ACME", "BETA", "ZED"}[i%3]
+		ev = append(ev, Evidence{Start: at(9, 2*i), End: at(9, 2*i), Bucket: b, Label: b, Kind: KindEditor})
+	}
+	ss := Build(ev, present(at(9, 0), at(10, 0)), p)
+	var total time.Duration
+	for _, s := range ss {
+		if s.Bucket == BucketUnattributed {
+			continue
+		}
+		total += s.Duration()
+		if !s.Shared || s.Duration() > 25*time.Minute || s.Duration() < 15*time.Minute {
+			t.Errorf("%s: %v of span %v, shared=%v", s.Bucket, s.Duration(), s.Span(), s.Shared)
+		}
+	}
+	if total < 56*time.Minute || total > 62*time.Minute {
+		t.Errorf("shares should add up to the hour, got %v", total)
+	}
+	// Parallel mode: Claude running in ACME all hour while BETA is typed:
+	// both count in full. Three Claude runs at once would share one unit.
+	ev = append(beats(KindClaude, "ACME", "acme", at(11, 0), at(12, 1), 2*time.Minute),
+		beats(KindEditor, "BETA", "beta", at(11, 0), at(12, 1), 2*time.Minute)...)
+	ss = Build(ev, present(at(11, 0), at(12, 1)), p)
+	if a := find(ss, "ACME"); len(a) != 1 || a[0].Duration() < 59*time.Minute {
+		t.Errorf("autonomous Claude should count in full: %+v", a)
+	}
+	three := append(append(beats(KindClaude, "ACME", "a", at(16, 0), at(17, 1), 2*time.Minute),
+		beats(KindClaude, "BETA", "b", at(16, 0), at(17, 1), 2*time.Minute)...),
+		beats(KindClaude, "ZED", "z", at(16, 0), at(17, 1), 2*time.Minute)...)
+	var sum time.Duration
+	for _, x := range Build(three, present(at(16, 0), at(17, 1)), p) {
+		if x.Bucket != BucketUnattributed {
+			sum += x.Duration()
+		}
+	}
+	if sum < 58*time.Minute || sum > 62*time.Minute {
+		t.Errorf("three concurrent Claude runs share one unit, got %v", sum)
+	}
+	if b := find(ss, "BETA"); len(b) != 1 || b[0].Duration() < 59*time.Minute {
+		t.Errorf("typing alongside should count in full: %+v", b)
+	}
+	// Share mode: the same hour is split.
+	ps := p
+	ps.ShareAll = true
+	ss = Build(ev, present(at(11, 0), at(12, 1)), ps)
+	if a := find(ss, "ACME"); len(a) != 1 || a[0].Duration() > 32*time.Minute {
+		t.Errorf("share mode should split: %+v", a)
+	}
+	// Alone: no sharing, full span.
+	ss = Build(beats(KindEditor, "ACME", "a", at(14, 0), at(15, 1), 2*time.Minute), present(at(14, 0), at(15, 1)), p)
+	if a := find(ss, "ACME"); len(a) != 1 || a[0].Shared || a[0].Duration() != time.Hour {
+		t.Errorf("alone: %+v", a)
 	}
 }

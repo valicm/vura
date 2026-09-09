@@ -243,6 +243,7 @@ async function loadDay() {
   const rows = d.entries.map(e => {
     const need = e.bucket === '' && e.kind !== 'presence';
     const flags = (e.remote ? '<span class="flag remote">remote</span>' : '')
+      + (e.shared ? `<span class="flag" title="minutes shared with other buckets">shared · ${hm(e.observed)} of ${hm(e.span)}</span>` : '')
       + (e.identity ? '<span class="flag">moments only</span>' : '')
       + (need ? '<span class="flag need">assign or drop</span>' : '')
       + (!e.identity && e.observed && e.logged > e.observed ? `<span class="flag round">${hm(e.observed)}→${hm(e.logged)}</span>` : '');
@@ -257,7 +258,7 @@ async function loadDay() {
       <td><span class="dot" style="background:${colorFor(e.bucket || (e.kind==='call'?'call':e.kind==='unmapped'?'?':''))}"></span>${who}${flags}
         ${e.detail ? `<span class="detail">${esc(e.detail)}</span>` : ''}
         ${!editable && e.bucket && e.desc ? `<span class="desc ${e.auto?'auto':''}">“${esc(e.desc)}”</span>` : ''}${tools}</td>
-      <td class="mono" style="white-space:nowrap">${t(e.start)}–${t(e.end)}</td>
+      <td class="mono" style="white-space:nowrap">${editable ? `<input class="slot" data-k="${esc(e.key)}" value="${t(e.start)}-${t(e.end)}" size="11" style="font:inherit;width:8.5em" title="time window, HH:MM-HH:MM">` : `${t(e.start)}–${t(e.end)}`}</td>
       <td class="h mono">${e.identity ? '0m' : hm(e.logged)}</td></tr>`;
   }).join('');
   const meet = (d.meetings||[]).map(m => `<span><span class="dot" style="background:transparent;border:1.5px solid ${colorFor(m.bucket)}"></span>${t(m.start)} ${esc(m.title)}</span>`).join('');
@@ -287,6 +288,7 @@ async function loadDay() {
   document.querySelectorAll('input.dur[data-k]').forEach(inp => inp.onchange = () => inp.value.trim() && doOp({op:'logged', target: inp.dataset.k, dur: inp.value.trim()}));
   document.querySelectorAll('input.text[data-k]').forEach(inp => inp.onchange = () => doOp({op:'desc', target: inp.dataset.k, text: inp.value}));
   document.querySelectorAll('.drop').forEach(b => b.onclick = () => doOp({op:'drop', target: b.dataset.k}));
+  document.querySelectorAll('input.slot').forEach(inp => inp.onchange = () => { const [a, b] = inp.value.split('-'); if (a && b) doOp({op:'slot', target: inp.dataset.k, at: a.trim(), text: b.trim()}); });
   document.querySelectorAll('.claude').forEach(b => b.onclick = () => { note('asking Claude…'); doOp({op:'claude', target: b.dataset.k}); });
   const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
   on('#act-merge', () => { const ks = [...selectedKeys]; doOp({op:'merge', target: ks[0], others: ks.slice(1)}); });

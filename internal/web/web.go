@@ -211,6 +211,8 @@ type entryJSON struct {
 	Auto     bool     `json:"auto"`
 	Detail   string   `json:"detail"`
 	Remote   bool     `json:"remote"`
+	Shared   bool     `json:"shared"`
+	Span     int      `json:"span"` // seconds, end-start
 	Identity bool     `json:"identity"`
 	Tickets  []string `json:"tickets"`
 }
@@ -272,7 +274,7 @@ func (h *Handler) day(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, entryJSON{N: e.N, Key: e.Key(), Bucket: e.Bucket, Label: label, Issue: e.Issue, Kind: e.Kind,
 			Start: e.Start.Format(time.RFC3339), End: e.End.Format(time.RFC3339),
 			Observed: int(e.Observed.Seconds()), Logged: int(e.Logged.Seconds()), Desc: e.Desc, Auto: e.AutoDesc,
-			Detail: e.Detail, Remote: e.Remote, Identity: e.Identity, Tickets: e.Tickets})
+			Detail: e.Detail, Remote: e.Remote, Shared: e.Shared, Span: int(e.End.Sub(e.Start).Seconds()), Identity: e.Identity, Tickets: e.Tickets})
 	}
 	if evs, err := h.st.EventsRange(ctx, from, to); err == nil {
 		for _, e := range evs {

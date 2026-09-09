@@ -232,7 +232,7 @@ waiting. Open the dashboard, or `vura reconcile` in a terminal:
 
 The dashboard at http://127.0.0.1:4242/ shows the week per bucket, one day as
 a timeline with sessions and evidence, unmapped cues and collector health, and
-carries the whole reconcile: assign, edit time and wording, merge selected rows,
+carries the whole reconcile: assign, edit time, move the time window, edit wording, merge selected rows,
 drop, notes, Claude wording, dry run, accept, skip, amend, and per-worklog
 retry. Writes require a same-origin request with a custom header. A top-bar
 indicator (GNOME with the AppIndicator extension) shows today's totals and the
@@ -240,7 +240,17 @@ queue.
 
 ## How the hours are decided
 
-- Evidence of one bucket closer than `idle_gap` (30m) joins one session.
+- Evidence of one bucket closer than `idle_gap` (30m) joins one session. The
+  session's span is for the timeline; its hours come from minute sharing.
+- **Minute sharing.** Each minute holds up to two units. Your keyboard is one
+  unit, split equally among the buckets you touched in that minute (editor,
+  browser, quick commands), so working across three projects does not triple
+  the day. Work that runs on its own is a second unit, split among those
+  (Claude runs, calls, meetings, long commands), so a Claude task in one
+  project counts beside your typing in another, but three Claude runs at once
+  share one unit. `overlap = "share"` puts everything in one unit and a day
+  never exceeds the wall clock. A row whose span gave minutes away says
+  "shared" and shows both numbers.
 - Between two pieces of evidence with nothing in between, keyboard idle past
   `away_after` (10m) ends the session when input stopped. Claude Code
   heartbeats, an open mic and a meeting are exempt; Claude heartbeats during

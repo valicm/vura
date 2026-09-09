@@ -28,7 +28,7 @@ func cfg() *config.Config {
 }
 
 func sess(bucket, label string, a, b time.Time, tickets ...string) session.Session {
-	return session.Session{Bucket: bucket, Label: label, Start: a, End: b, Kinds: map[session.Kind]int{}, Tickets: tickets}
+	return session.Session{Bucket: bucket, Label: label, Start: a, End: b, Allocated: b.Sub(a), Kinds: map[session.Kind]int{}, Tickets: tickets}
 }
 
 func TestNewRoundsSplitsAndDescribes(t *testing.T) {
@@ -175,5 +175,28 @@ func TestOpsReplay(t *testing.T) {
 	d3 := New(c, "2026-09-04", ss[:2], nil, nil)
 	if sk := d3.Replay(d.Ops); sk != 1 || len(d3.Ops) != 3 {
 		t.Errorf("skipped %d, kept %d", sk, len(d3.Ops))
+	}
+}
+
+func TestSetSlot(t *testing.T) {
+	c := cfg()
+	d := New(c, "2026-09-04", []session.Session{sess("ACME", "a", at(10, 0), at(10, 40))}, nil, nil)
+	if err := d.SetSlot(1, at(9, 30), at(11, 0)); err != nil {
+		t.Fatal(err)
+	}
+	e := d.Entries[0]
+	if !e.Start.Equal(at(9, 30)) || e.Observed != 90*time.Minute || e.Logged != 90*time.Minute || e.Shared {
+		t.Errorf("%+v", e)
+	}
+	if err := d.SetSlot(1, at(11, 0), at(10, 0)); err == nil {
+		t.Error("end before start must fail")
+	}
+	// Replayable.
+	d2 := New(c, "2026-09-04", []session.Session{sess("ACME", "a", at(10, 0), at(10, 40))}, nil, nil)
+	if err := d2.Apply(Op{Kind: "slot", Target: d2.Entries[0].Key(), At: at(9, 30).Format(time.RFC3339), End: at(11, 0).Format(time.RFC3339)}); err != nil {
+		t.Fatal(err)
+	}
+	if d2.Entries[0].Observed != 90*time.Minute {
+		t.Errorf("replay: %+v", d2.Entries[0])
 	}
 }

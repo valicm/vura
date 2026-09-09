@@ -52,6 +52,14 @@ type Session struct {
 	// closes the session at the moment input stopped. Evidence during the idle
 	// stretch (Claude heartbeats, a running command) overrides it.
 	AwayAfter Dur `toml:"away_after"`
+	// EvidenceTimeout: a heartbeat or command keeps its bucket active this
+	// long. Minutes are shared equally among buckets active at once, so a day
+	// never sums past the wall clock.
+	EvidenceTimeout Dur `toml:"evidence_timeout"`
+	// Overlap: "parallel" (default) lets autonomous evidence (Claude, calls,
+	// meetings, running commands) count in full while attention evidence
+	// shares minutes; "share" shares everything so a day never exceeds wall clock.
+	Overlap string `toml:"overlap"`
 }
 
 type Sources struct {
@@ -171,7 +179,7 @@ func defaults() *Config {
 			NagDays: 4, MinDay: Dur{20 * time.Minute}, MaxWall: 16},
 		Session: Session{IdleGap: Dur{20 * time.Minute}, DetectMin: Dur{5 * time.Minute},
 			RoundMin: Dur{15 * time.Minute}, MaxEntry: Dur{4*time.Hour + 30*time.Minute}, AllowOverlap: true,
-			AwayAfter: Dur{10 * time.Minute}},
+			AwayAfter: Dur{10 * time.Minute}, EvidenceTimeout: Dur{10 * time.Minute}, Overlap: "parallel"},
 		Sources: Sources{Atuin: "~/.local/share/atuin/history.db", Listen: "127.0.0.1:4242",
 			Gnome: true, Audio: true, Tray: true, PresenceEvery: Dur{60 * time.Second}, AudioEvery: Dur{30 * time.Second},
 			ShellEvery: Dur{60 * time.Second}, GitEvery: Dur{time.Hour}, GitSince: Dur{14 * 24 * time.Hour},
@@ -190,6 +198,9 @@ func (c *Config) finish() error {
 		return err
 	}
 	c.Boundary = b
+	if c.Session.Overlap != "parallel" && c.Session.Overlap != "share" {
+		return fmt.Errorf("session.overlap %q: want parallel or share", c.Session.Overlap)
+	}
 	aw := strings.SplitN(c.Day.ActiveWindow, "-", 2)
 	if len(aw) != 2 {
 		return fmt.Errorf("active_window %q: want HH:MM-HH:MM", c.Day.ActiveWindow)

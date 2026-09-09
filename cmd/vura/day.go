@@ -101,6 +101,9 @@ func printDay(cfg *config.Config, day string, ss []session.Session) {
 		if s.Remote {
 			flags += " ⇡remote"
 		}
+		if s.Shared {
+			flags += fmt.Sprintf(" shared (%s of %s)", hmD(s.Duration()), hmD(s.Span()))
+		}
 		if s.PointsOnly {
 			flags += " moments only, not counted"
 		} else if s.Duration() < round {

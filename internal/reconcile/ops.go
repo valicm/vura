@@ -14,13 +14,14 @@ import (
 // log of edits survives the day being rebuilt from fresh evidence. An op
 // whose target no longer exists is skipped on replay.
 type Op struct {
-	Kind   string   `json:"kind"`             // logged | desc | assign | drop | merge | note
+	Kind   string   `json:"kind"`             // logged | desc | assign | drop | merge | note | slot
 	Target string   `json:"target,omitempty"` // entry key
 	Others []string `json:"others,omitempty"` // merge: keys folded into Target
 	Dur    string   `json:"dur,omitempty"`
 	Text   string   `json:"text,omitempty"`
 	Bucket string   `json:"bucket,omitempty"`
-	At     string   `json:"at,omitempty"` // note: RFC3339 start
+	At     string   `json:"at,omitempty"`  // note: RFC3339 start; slot: RFC3339 start
+	End    string   `json:"end,omitempty"` // slot: RFC3339 end
 }
 
 // Key identifies an entry across rebuilds: kind, start, end, original bucket.
@@ -92,6 +93,16 @@ func (d *Day) apply(op Op) error {
 		return d.Assign(n, strings.ToUpper(op.Bucket))
 	case "drop":
 		return d.Drop(n)
+	case "slot":
+		a, err := time.Parse(time.RFC3339, op.At)
+		if err != nil {
+			return err
+		}
+		b, err := time.Parse(time.RFC3339, op.End)
+		if err != nil {
+			return err
+		}
+		return d.SetSlot(n, a.In(d.cfg.Location), b.In(d.cfg.Location))
 	}
 	return fmt.Errorf("unknown op %q", op.Kind)
 }

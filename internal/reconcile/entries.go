@@ -28,6 +28,7 @@ type Entry struct {
 	Detail   string // evidence summary, display only
 	AutoDesc bool   // Desc was generated, not written by the user
 	Remote   bool
+	Shared   bool   // part of the span went to other buckets
 	Kind     string // "session" | "call" | "presence" | "unmapped" | "note"
 	Tickets  []string
 	Dropped  bool
@@ -52,7 +53,7 @@ func New(cfg *config.Config, day string, ss []session.Session, commits []store.C
 	round := cfg.Session.RoundMin.Duration
 	maxEntry := cfg.Session.MaxEntry.Duration
 	for _, s := range ss {
-		e := Entry{Label: s.Label, Start: s.Start, End: s.End, Observed: s.Duration(), Remote: s.Remote, Tickets: s.Tickets, Detail: s.Summary(), Identity: s.PointsOnly}
+		e := Entry{Label: s.Label, Start: s.Start, End: s.End, Observed: s.Duration(), Remote: s.Remote, Shared: s.Shared, Tickets: s.Tickets, Detail: s.Summary(), Identity: s.PointsOnly}
 		switch s.Bucket {
 		case session.BucketUnattributed:
 			e.Kind = "presence"
@@ -249,6 +250,23 @@ func (d *Day) SetLogged(n int, dur time.Duration) error {
 	}
 	e.Logged = dur
 	e.Identity = false
+	return nil
+}
+
+// SetSlot moves an entry's time window. Observed and logged follow the new
+// span; the entry is no longer marked shared.
+func (d *Day) SetSlot(n int, start, end time.Time) error {
+	e, err := d.get(n)
+	if err != nil {
+		return err
+	}
+	if !end.After(start) {
+		return fmt.Errorf("end must be after start")
+	}
+	e.Start, e.End = start, end
+	e.Observed = end.Sub(start)
+	e.Logged = session.RoundUp(e.Observed, d.cfg.Session.RoundMin.Duration)
+	e.Shared, e.Identity = false, false
 	return nil
 }
 

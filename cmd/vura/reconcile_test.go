@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/valicm/vura/internal/config"
 )
 
 func TestFlagsFirst(t *testing.T) {
@@ -35,5 +37,27 @@ func TestParseDur(t *testing.T) {
 		if _, err := parseDur(bad); err == nil {
 			t.Errorf("parseDur(%q) should fail", bad)
 		}
+	}
+}
+
+func TestParseSlot(t *testing.T) {
+	cfg, err := config.Load("/nonexistent/config.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b, err := parseSlot(cfg, "2026-09-04", "10:15-11:30")
+	if err != nil || a.Hour() != 10 || a.Minute() != 15 || b.Sub(a) != 75*time.Minute {
+		t.Errorf("%v %v %v", a, b, err)
+	}
+	a, b, err = parseSlot(cfg, "2026-09-04", "23:30-00:30")
+	if err != nil || b.Sub(a) != time.Hour || a.Day() != 4 || b.Day() != 5 {
+		t.Errorf("past midnight: %v %v %v", a, b, err)
+	}
+	a, b, err = parseSlot(cfg, "2026-09-04", "01:00-02:00")
+	if err != nil || a.Day() != 5 {
+		t.Errorf("before the boundary belongs to the next calendar day: %v %v", a, err)
+	}
+	if _, _, err := parseSlot(cfg, "2026-09-04", "10:15"); err == nil {
+		t.Error("missing end must fail")
 	}
 }

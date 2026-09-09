@@ -27,6 +27,8 @@ func Day(ctx context.Context, st *store.Store, cfg *config.Config, res *bucket.R
 		DetectMin:   cfg.Session.DetectMin.Duration,
 		PresentIdle: 5 * time.Minute, PresenceSpan: 5 * time.Minute,
 		ActiveStart: cfg.ActiveStart, ActiveEnd: cfg.ActiveEnd,
+		EvidenceTimeout: cfg.Session.EvidenceTimeout.Duration,
+		ShareAll:        cfg.Session.Overlap == "share",
 	}
 	var ev []Evidence
 
@@ -228,7 +230,7 @@ func ToStore(day, device string, ss []Session) []store.Session {
 	for _, s := range ss {
 		out = append(out, store.Session{
 			Day: day, Bucket: s.Bucket, Label: s.Label, Tickets: strings.Join(s.Tickets, ","),
-			Source: s.SourceString(), Start: s.Start, End: s.End, Remote: s.Remote, Device: device,
+			Source: s.SourceString(), Start: s.Start, End: s.End, Seconds: int(s.Duration().Seconds()), Remote: s.Remote, Device: device,
 		})
 	}
 	return out

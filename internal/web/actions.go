@@ -171,6 +171,17 @@ func (h *Handler) op(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, err, 400)
 			return
 		}
+	case "slot":
+		// req.At and req.Text carry HH:MM start and end on the working day.
+		a, b, err := slotTimes(h, day, req.At, req.Text)
+		if err != nil {
+			writeErr(w, err, 400)
+			return
+		}
+		if err := d.Apply(reconcile.Op{Kind: "slot", Target: req.Target, At: a.Format(time.RFC3339), End: b.Format(time.RFC3339)}); err != nil {
+			writeErr(w, err, 400)
+			return
+		}
 	case "desc", "assign", "drop", "merge":
 		if err := d.Apply(reconcile.Op{Kind: req.Op, Target: req.Target, Others: req.Others, Text: req.Text, Bucket: req.Bucket}); err != nil {
 			writeErr(w, err, 400)
@@ -294,6 +305,36 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeErr(w, fmt.Errorf("unknown action %q", req.Action), 400)
 	}
+}
+
+func slotTimes(h *Handler, day, startHHMM, endHHMM string) (time.Time, time.Time, error) {
+	from, _, err := h.cfg.Boundary.Range(day, h.cfg.Location)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	at := func(hhmm string) (time.Time, error) {
+		t, err := time.ParseInLocation("15:04", strings.TrimSpace(hhmm), h.cfg.Location)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("%q: want HH:MM", hhmm)
+		}
+		d := time.Date(from.Year(), from.Month(), from.Day(), t.Hour(), t.Minute(), 0, 0, h.cfg.Location)
+		if d.Before(from) {
+			d = d.AddDate(0, 0, 1)
+		}
+		return d, nil
+	}
+	a, err := at(startHHMM)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	b, err := at(endHHMM)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if !b.After(a) {
+		b = b.AddDate(0, 0, 1)
+	}
+	return a, b, nil
 }
 
 func parseDur(s string) (time.Duration, error) {

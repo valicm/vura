@@ -257,6 +257,14 @@ func reconcileDay(ctx context.Context, st *store.Store, cfg *config.Config, res 
 					err = d.Assign(n, strings.ToUpper(f[2]))
 				}
 			}
+		case "t", "time", "slot":
+			var n int
+			if n, err = argN(f, 1); err == nil {
+				var a, b time.Time
+				if a, b, err = parseSlot(cfg, day, argRest(f, 2)); err == nil {
+					err = d.SetSlot(n, a, b)
+				}
+			}
 		case "d", "desc", "describe":
 			var n int
 			if n, err = argN(f, 1); err == nil {
@@ -516,6 +524,9 @@ func printScreen(cfg *config.Config, d *reconcile.Day, pos string) {
 		if e.Remote {
 			flags += "  ⇡remote"
 		}
+		if e.Shared {
+			flags += fmt.Sprintf("  shared (%s of %s)", hmD(e.Observed), hmD(e.End.Sub(e.Start)))
+		}
 		if e.Identity {
 			flags += "  moments only, 0 logged · e N DUR to log"
 		} else if e.Observed < round && e.Logged == round {
@@ -549,7 +560,7 @@ func printScreen(cfg *config.Config, d *reconcile.Day, pos string) {
 		}
 		fmt.Println()
 	}
-	fmt.Println("\n [enter] accept · e N DUR · m N M.. · a N BUCKET · d N text · c N|all · x N · n BUCKET DUR text · s skip · q quit · ? help")
+	fmt.Println("\n [enter] accept · e N DUR · t N HH:MM-HH:MM · m N M.. · a N BUCKET · d N text · c N|all · x N · n BUCKET DUR text · s skip · q quit · ? help")
 }
 
 func printHelp() {
@@ -558,6 +569,7 @@ func printHelp() {
   e N 1h30m        set logged time of entry N (observed time is kept for the record)
   m N M [K..]      merge entries into N: observed adds up, rounding applies once
   a N BUCKET       assign an unattributed / call / unmapped entry to a bucket
+  t N 10:15-11:30  move entry N to another time window (observed and logged follow)
   d N text         set the description of entry N
   c N | c all      ask Claude to word the description (language only; hours never change)
   x N              drop entry N (it will not be logged)
@@ -619,6 +631,42 @@ func argRest(f []string, i int) string {
 		return ""
 	}
 	return strings.Join(f[i:], " ")
+}
+
+// parseSlot turns "10:15-11:30" into two instants on the working day; an end
+// earlier than the start means past midnight.
+func parseSlot(cfg *config.Config, day, s string) (time.Time, time.Time, error) {
+	a, b, ok := strings.Cut(strings.TrimSpace(s), "-")
+	if !ok {
+		return time.Time{}, time.Time{}, errors.New("want HH:MM-HH:MM")
+	}
+	from, _, err := cfg.Boundary.Range(day, cfg.Location)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	at := func(hhmm string) (time.Time, error) {
+		t, err := time.ParseInLocation("15:04", strings.TrimSpace(hhmm), cfg.Location)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("%q: want HH:MM", hhmm)
+		}
+		d := time.Date(from.Year(), from.Month(), from.Day(), t.Hour(), t.Minute(), 0, 0, cfg.Location)
+		if d.Before(from) {
+			d = d.AddDate(0, 0, 1) // past midnight, before the 03:00 boundary
+		}
+		return d, nil
+	}
+	x, err := at(a)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	y, err := at(b)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if !y.After(x) {
+		y = y.AddDate(0, 0, 1)
+	}
+	return x, y, nil
 }
 
 // parseDur accepts 1h30m, 45m, 1.5h, 2h, or a bare decimal meaning hours.

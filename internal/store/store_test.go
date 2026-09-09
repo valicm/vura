@@ -206,7 +206,7 @@ func TestReplaceSessions(t *testing.T) {
 	s := open(t)
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
-	in := []Session{{Day: "2026-09-04", Bucket: "AUC", Start: now, End: now.Add(time.Hour), Label: "a", Remote: true}}
+	in := []Session{{Day: "2026-09-04", Bucket: "AUC", Start: now, End: now.Add(time.Hour), Seconds: 3600, Label: "a", Remote: true}}
 	if err := s.ReplaceSessions(ctx, "2026-09-04", in); err != nil {
 		t.Fatal(err)
 	}

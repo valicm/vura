@@ -60,6 +60,12 @@ type Params struct {
 	PresentIdle            time.Duration // idle below this counts as "present"
 	PresenceSpan           time.Duration // max time one presence row covers (sampler gap cap)
 	ActiveStart, ActiveEnd clock.Boundary
+	// EvidenceTimeout: a moment of evidence keeps its bucket active this long.
+	EvidenceTimeout time.Duration
+	// ShareAll: every bucket shares each minute (day never exceeds wall clock).
+	// Otherwise autonomous evidence counts in full and only attention evidence
+	// (editor, browser, quick commands) is shared.
+	ShareAll bool
 }
 
 // Session is the output unit. Overlap between buckets is allowed.
@@ -76,14 +82,30 @@ type Session struct {
 	// no activity signal behind it. Identity without duration: shown, never
 	// counted until the user assigns time.
 	PointsOnly bool
+	// Allocated is the session's share of wall-clock time after minutes
+	// shared with other buckets are split. Duration() reports it.
+	Allocated time.Duration
+	// Shared is true when a meaningful part of the span went to other buckets.
+	Shared bool
+
+	cover []coverSpan // evidence coverage inside the span
 }
 
-// Duration is observed time; zero for a points-only session.
+// coverSpan is one piece of evidence coverage; auto marks evidence that
+// progresses without the user's attention (Claude, a call, a meeting, a
+// running command) and so is not shared with other buckets in parallel mode.
+type coverSpan struct {
+	a, b time.Time
+	auto bool
+}
+
+// Duration is observed time: the session's allocated share of the wall
+// clock; zero for a points-only session.
 func (s Session) Duration() time.Duration {
 	if s.PointsOnly {
 		return 0
 	}
-	return s.End.Sub(s.Start)
+	return s.Allocated
 }
 
 // Span is first to last evidence, regardless of kind.
@@ -149,12 +171,23 @@ func Build(ev []Evidence, pres []Presence, p Params) []Session {
 			}
 			continue
 		}
-		if s.Duration() >= p.DetectMin {
+		if s.End.Sub(s.Start) >= p.DetectMin {
 			kept = append(kept, s)
 		}
 	}
+	allocate(kept, tl, p)
+	// Drop sessions whose share fell under the floor.
+	n := 0
+	for _, s := range kept {
+		if s.PointsOnly || s.Duration() >= p.DetectMin {
+			kept[n] = s
+			n++
+		}
+	}
+	kept = kept[:n]
 	// Presence with no surviving session over it is unattributed.
 	for _, s := range unattributed(tl, kept, p) {
+		s.Allocated = s.End.Sub(s.Start)
 		if s.Duration() >= p.DetectMin {
 			kept = append(kept, s)
 		}
@@ -221,6 +254,101 @@ func minDuration(a, b time.Duration) time.Duration {
 	return b
 }
 
+// allocate shares wall-clock minutes among concurrently active sessions.
+// Each minute holds up to two units: one for the keyboard (attention
+// evidence: editor, browser, quick commands, shared equally among the
+// buckets touched) and one for work that runs on its own (autonomous
+// evidence: Claude, calls, meetings, long commands, shared equally among
+// those). Three Claude sessions at once share one unit; a Claude run beside
+// your own typing counts beside it. If nothing covers a minute, the sessions
+// whose span contains it split the keyboard unit, provided the keyboard was
+// in use, so reading inside one session counts and an idle span does not.
+// Points-only sessions take no share. With ShareAll, everything is
+// attention and a day never exceeds the wall clock.
+func allocate(ss []Session, tl timeline, p Params) {
+	if len(ss) == 0 {
+		return
+	}
+	for i := range ss {
+		ss[i].cover = clipCover(ss[i].cover, ss[i].Start, ss[i].End)
+	}
+	start, end := ss[0].Start, ss[0].End
+	for _, s := range ss {
+		if s.Start.Before(start) {
+			start = s.Start
+		}
+		if s.End.After(end) {
+			end = s.End
+		}
+	}
+	start = start.Truncate(time.Minute)
+	shares := make([]float64, len(ss))
+	var auto, attention, spanning []int
+	for m := start; m.Before(end); m = m.Add(time.Minute) {
+		mid := m.Add(30 * time.Second)
+		auto, attention, spanning = auto[:0], attention[:0], spanning[:0]
+		for i, s := range ss {
+			if s.PointsOnly || !inSpan(mid, s.Start, s.End) {
+				continue
+			}
+			spanning = append(spanning, i)
+			isAuto, isAtt := false, false
+			for _, c := range s.cover {
+				if inSpan(mid, c.a, c.b) {
+					if c.auto {
+						isAuto = true
+					} else {
+						isAtt = true
+					}
+				}
+			}
+			switch {
+			case isAuto:
+				auto = append(auto, i)
+			case isAtt:
+				attention = append(attention, i)
+			}
+		}
+		for _, i := range auto {
+			shares[i] += 1 / float64(len(auto))
+		}
+		active := attention
+		if len(active) == 0 && len(auto) == 0 {
+			if idle, ok := tl.idleAt(mid); ok && idle >= p.PresentIdle {
+				continue // nobody at the keyboard and no evidence: not work
+			}
+			active = spanning
+		}
+		for _, i := range active {
+			shares[i] += 1 / float64(len(active))
+		}
+	}
+	for i := range ss {
+		ss[i].Allocated = time.Duration(shares[i] * float64(time.Minute)).Round(time.Second)
+		if sp := ss[i].End.Sub(ss[i].Start); sp > 0 && ss[i].Allocated < sp*9/10 {
+			ss[i].Shared = true
+		}
+	}
+}
+
+func inSpan(t, a, b time.Time) bool { return !t.Before(a) && t.Before(b) }
+
+func clipCover(spans []coverSpan, a, b time.Time) []coverSpan {
+	var out []coverSpan
+	for _, s := range spans {
+		if s.a.Before(a) {
+			s.a = a
+		}
+		if s.b.After(b) {
+			s.b = b
+		}
+		if s.b.After(s.a) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // cluster walks one bucket's evidence in time order.
 func cluster(ev []Evidence, tl timeline, p Params) []Session {
 	var out []Session
@@ -265,6 +393,15 @@ func cluster(ev []Evidence, tl timeline, p Params) []Session {
 		if e.End.After(cur.End) {
 			cur.End = e.End
 		}
+		// A moment keeps the bucket active for EvidenceTimeout; an interval
+		// covers itself. Merged later, clipped to the span at allocation.
+		ce := e.End
+		if t := e.Start.Add(p.EvidenceTimeout); t.After(ce) {
+			ce = t
+		}
+		auto := e.Kind == KindClaude || e.Kind == KindCall || e.Kind == KindEvent ||
+			(e.Kind == KindShell && e.End.Sub(e.Start) >= time.Minute)
+		cur.cover = append(cur.cover, coverSpan{e.Start, ce, auto && !p.ShareAll})
 		cur.Kinds[e.Kind]++
 		if e.Label != "" {
 			labels[e.Label]++

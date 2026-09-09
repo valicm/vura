@@ -526,6 +526,7 @@ type Session struct {
 	Source  string
 	Start   time.Time
 	End     time.Time
+	Seconds int // allocated share; the span is Start..End
 	Remote  bool
 	Device  string
 }
@@ -543,7 +544,7 @@ func (s *Store) ReplaceSessions(ctx context.Context, day string, ss []Session) e
 	for _, x := range ss {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO sessions(day, bucket, start, end, seconds, source, label, tickets, remote, device)
 			VALUES(?,?,?,?,?,?,?,?,?,?)`,
-			day, x.Bucket, x.Start.Unix(), x.End.Unix(), int64(x.End.Sub(x.Start).Seconds()),
+			day, x.Bucket, x.Start.Unix(), x.End.Unix(), x.Seconds,
 			nullStr(x.Source), nullStr(x.Label), nullStr(x.Tickets), b2i(x.Remote), nullStr(x.Device)); err != nil {
 			return err
 		}
