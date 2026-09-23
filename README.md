@@ -91,20 +91,28 @@ past days on the next view.
 
 ## Install
 
-Requirements: Linux with systemd user services, Go 1.25 to build, and for the
-collectors below whatever each one needs. Tested on Fedora 43 with GNOME on
-Wayland.
+Requirements: Go 1.25 to build, and for the collectors below whatever each
+one needs. On **Linux**, systemd user services; tested on Fedora 43 with GNOME
+on Wayland. On **macOS**, the Xcode command line tools (`xcode-select
+--install`): the menu bar icon and mic detection use cgo. Mic detection names
+the app on macOS 14.2 and later; before that it only knows the mic is in use.
 
     git clone https://github.com/valicm/vura && cd vura
-    make install          # builds, installs to ~/.local/bin, enables vurad.service and the timers
+    make install          # builds, installs to ~/.local/bin, starts vurad and the timers
     vura check            # once tokens are stored: verifies Jira/Tempo and every bucket issue
+
+On Linux `make install` enables `vurad.service` and the systemd timers; on
+macOS it loads LaunchAgents from `launchd/` into `~/Library/LaunchAgents`
+(vurad at login, nag at 10:00 and 19:00, backup at 03:30), with logs in
+`~/Library/Logs/vura`. `make logs` follows the daemon's log on either.
 
 `make install` copies `config.example.toml` to `~/.config/vura/config.toml` on
 first run. Edit `[identity]` and the `[buckets.*]` blocks; everything else has
 defaults. `make uninstall` removes it all.
 
-Tokens never go in the config. Store them in the GNOME keyring, or set
-`VURA_<NAME>_TOKEN` in the service environment:
+Tokens never go in the config. Store them in the GNOME keyring (Linux) or
+the login Keychain (macOS), or set `VURA_<NAME>_TOKEN` in the service
+environment:
 
     secret-tool store --label='vura tempo'  service vura key tempo
     secret-tool store --label='vura jira'   service vura key jira
@@ -112,10 +120,14 @@ Tokens never go in the config. Store them in the GNOME keyring, or set
     secret-tool store --label='vura gitlab' service vura key gitlab
     secret-tool store --label='vura slack'  service vura key slack:<workspace>
 
+    # macOS: prompts for the token
+    security add-generic-password -s vura -a tempo -w
+    security add-generic-password -s vura -a slack:<workspace> -w
+
 ## Setting up each source
 
 Every source is optional. A missing token or program skips that source with
-one warning in the journal and the rest keep collecting.
+one warning in the daemon log and the rest keep collecting.
 
 ### Editors and Claude Code (WakaTime plugins)
 
@@ -150,7 +162,8 @@ Domains count as evidence only when a bucket's `domains` rule claims them.
 
 ### Terminal (atuin)
 
-Install [atuin](https://atuin.sh) and add its shell hook. On **bash** it also
+Install [atuin](https://atuin.sh) and add its shell hook. zsh (the macOS
+default) works as is. On **bash** it also
 needs [bash-preexec](https://github.com/rcaloras/bash-preexec) sourced before
 `atuin init`, or nothing is recorded:
 
@@ -169,12 +182,16 @@ List each repo under the bucket it belongs to and your author emails under
 is taken from the branch name first, then the subject. Commits are identity
 and moments, never duration.
 
-### Presence and calls (GNOME + PipeWire)
+### Presence and calls
 
-Nothing to install. Idle time comes from mutter's IdleMonitor over D-Bus,
-inhibitors (Caffeine, a browser playing audio) from gnome-session, and calls
-from applications holding a microphone capture stream in PipeWire. Window
-focus is never read.
+Nothing to install. On **Linux**, idle time comes from mutter's IdleMonitor
+over D-Bus, inhibitors (Caffeine, a browser playing audio) from gnome-session,
+and calls from applications holding a microphone capture stream in PipeWire.
+On **macOS**, idle time is IOKit's `HIDIdleTime` (via `ioreg`), keep-awake
+holders (Amphetamine, `caffeinate`, a video) come from `pmset -g assertions`,
+and calls from CoreAudio's list of processes with input running. Window focus
+is never read, and neither platform needs an accessibility or screen
+recording permission.
 
 ### Calendars
 
@@ -235,8 +252,8 @@ a timeline with sessions and evidence, unmapped cues and collector health, and
 carries the whole reconcile: assign, edit time, move the time window, edit wording, merge selected rows,
 drop, notes, Claude wording, dry run, accept, skip, amend, and per-worklog
 retry. Writes require a same-origin request with a custom header. A top-bar
-indicator (GNOME with the AppIndicator extension) shows today's totals and the
-queue.
+indicator (GNOME with the AppIndicator extension, or the macOS menu bar) shows
+today's totals and the queue.
 
 ## How the hours are decided
 
@@ -275,7 +292,8 @@ queue.
     internal/web                dashboard endpoints + embedded page
     internal/tray               top-bar indicator
     browser/                    Chrome extension
-    systemd/                    service, timers, desktop entry
+    systemd/                    Linux: service, timers, desktop entry
+    launchd/                    macOS: LaunchAgents for the daemon, nag and backup
     assets/                     logo
 
 ## Setting up with Claude Code

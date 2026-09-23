@@ -1,5 +1,6 @@
-// Package audio detects calls: an application holding an open PipeWire
-// capture stream (a "source-output" in pactl terms) is recording the mic.
+// Package audio detects calls: an application holding an open capture
+// stream is recording the mic. On Linux that is a PipeWire "source-output"
+// (pactl); on macOS it is a CoreAudio process with input running.
 // Headphones plugged in tells you nothing; a capture stream tells you someone
 // is talking. Each stream becomes an interval row in the audio table.
 package audio
@@ -8,7 +9,6 @@ import (
 	"bufio"
 	"context"
 	"log/slog"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -19,7 +19,7 @@ type Poller struct {
 	store  *store.Store
 	device string
 	log    *slog.Logger
-	open   map[string]int64 // pactl stream index -> audio.id
+	open   map[string]int64 // stream key (pactl index, or "pid:N" on macOS) -> audio.id
 	// sourceNames maps source index -> node name so monitor streams are labelled.
 	sourceNames map[string]string
 }
@@ -50,7 +50,8 @@ func (p *Poller) Run(ctx context.Context, every time.Duration) {
 	}
 }
 
-// Stream is one capture stream as reported by `pactl list source-outputs`.
+// Stream is one capture stream: from `pactl list source-outputs` on Linux,
+// from CoreAudio's process list on macOS.
 type Stream struct {
 	Index, App, Binary, Media, Source string
 }
@@ -59,7 +60,7 @@ func (p *Poller) poll(ctx context.Context) {
 	now := time.Now()
 	streams, err := list(ctx)
 	if err != nil {
-		p.log.Warn("audio: pactl", "err", err)
+		p.log.Warn("audio: capture streams", "err", err)
 		return
 	}
 	p.refreshSources(ctx)
@@ -98,32 +99,6 @@ func (p *Poller) poll(ctx context.Context) {
 		delete(p.open, idx)
 		p.log.Info("audio: capture ended", "id", id)
 	}
-}
-
-func (p *Poller) refreshSources(ctx context.Context) {
-	out, err := exec.CommandContext(ctx, "pactl", "list", "sources", "short").Output()
-	if err != nil {
-		return
-	}
-	m := map[string]string{}
-	for _, line := range strings.Split(string(out), "\n") {
-		f := strings.Fields(line)
-		if len(f) >= 2 {
-			m[f[0]] = f[1]
-		}
-	}
-	p.sourceNames = m
-}
-
-// list parses `pactl list source-outputs`. The format is stable enough:
-// "Source Output #N" headers, indented "Key: value" lines, and a Properties
-// block of `key = "value"` lines.
-func list(ctx context.Context) ([]Stream, error) {
-	out, err := exec.CommandContext(ctx, "pactl", "list", "source-outputs").Output()
-	if err != nil {
-		return nil, err
-	}
-	return parse(string(out)), nil
 }
 
 func parse(text string) []Stream {

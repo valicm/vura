@@ -66,9 +66,13 @@ type Sources struct {
 	Atuin       string `toml:"atuin"`
 	Listen      string `toml:"listen"`
 	WakatimeKey string `toml:"wakatime_key"` // if set, heartbeats must carry it
-	Gnome       bool   `toml:"gnome"`
-	Audio       bool   `toml:"audio"`
-	Tray        bool   `toml:"tray"` // top-bar indicator (GNOME needs the AppIndicator extension)
+	// Presence samples keyboard idle and sleep inhibitors: GNOME's
+	// IdleMonitor on Linux, IOKit and pmset on macOS. `gnome` is the old
+	// name and still works when `presence` is not set.
+	Presence bool `toml:"presence"`
+	Gnome    bool `toml:"gnome"`
+	Audio    bool `toml:"audio"`
+	Tray     bool `toml:"tray"` // top-bar / menu-bar indicator (GNOME needs the AppIndicator extension)
 	// Sampling intervals; sane defaults if omitted.
 	PresenceEvery Dur `toml:"presence_every"`
 	AudioEvery    Dur `toml:"audio_every"`
@@ -152,8 +156,10 @@ func Path() string {
 	if p := os.Getenv("VURA_CONFIG"); p != "" {
 		return p
 	}
-	base, err := os.UserConfigDir()
-	if err != nil {
+	// ~/.config on every platform (not ~/Library/Application Support on
+	// macOS), next to the data in ~/.local/share, so one layout fits both.
+	base := os.Getenv("XDG_CONFIG_HOME")
+	if base == "" {
 		base = filepath.Join(os.Getenv("HOME"), ".config")
 	}
 	return filepath.Join(base, "vura", "config.toml")
@@ -164,8 +170,12 @@ func Path() string {
 func Load(path string) (*Config, error) {
 	c := defaults()
 	if b, err := os.ReadFile(path); err == nil {
-		if err := toml.Unmarshal(b, c); err != nil {
+		md, err := toml.Decode(string(b), c)
+		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		if !md.IsDefined("sources", "presence") && md.IsDefined("sources", "gnome") {
+			c.Sources.Presence = c.Sources.Gnome
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
@@ -181,7 +191,7 @@ func defaults() *Config {
 			RoundMin: Dur{15 * time.Minute}, MaxEntry: Dur{4*time.Hour + 30*time.Minute}, AllowOverlap: true,
 			AwayAfter: Dur{10 * time.Minute}, EvidenceTimeout: Dur{10 * time.Minute}, Overlap: "parallel"},
 		Sources: Sources{Atuin: "~/.local/share/atuin/history.db", Listen: "127.0.0.1:4242",
-			Gnome: true, Audio: true, Tray: true, PresenceEvery: Dur{60 * time.Second}, AudioEvery: Dur{30 * time.Second},
+			Presence: true, Gnome: true, Audio: true, Tray: true, PresenceEvery: Dur{60 * time.Second}, AudioEvery: Dur{30 * time.Second},
 			ShellEvery: Dur{60 * time.Second}, GitEvery: Dur{time.Hour}, GitSince: Dur{14 * 24 * time.Hour},
 			ShellDenylist:  []string{"pass", "gpg", "gpg2", "ssh-add", "op", "bw", "vault", "gopass", "keepassxc-cli"},
 			MeetingDomains: []string{"meet.google.com", "teams.microsoft.com", "teams.live.com", "zoom.us", "whereby.com", "meet.jit.si"}},

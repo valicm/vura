@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -687,9 +688,13 @@ func parseDur(s string) (time.Duration, error) {
 	return 0, fmt.Errorf("duration %q: want 1h30m, 45m or 1.5", s)
 }
 
-// execNotify sends a desktop notification; failures are ignored.
+// execNotify sends a desktop notification; failures are ignored. On macOS
+// the text goes to osascript as arguments, never spliced into the script.
 func execNotify(summary, body string) error {
 	cmd := execCommand("notify-send", "--app-name=vura", "--icon=appointment-soon", summary, body)
+	if runtime.GOOS == "darwin" {
+		cmd = execCommand("osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", summary, body)
+	}
 	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
 	return cmd.Run()
 }
