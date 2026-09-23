@@ -28,12 +28,12 @@ overlap       = "parallel"     # parallel: your typing is one unit per minute, s
                                # share: everything shares one unit; a day never exceeds the wall clock.
 
 [sources]
-atuin          = "~/.local/share/atuin/history.db"   # read-only; needs bash-preexec on bash
+atuin          = "~/.local/share/atuin/history.db"   # read-only; needs bash-preexec on bash (zsh works as is)
 listen         = "127.0.0.1:4242"                    # WakaTime endpoint: api_url = http://127.0.0.1:4242/api
 wakatime_key   = ""            # set to api_key from ~/.wakatime.cfg to require it; empty accepts all
-gnome          = true          # mutter IdleMonitor + gnome-session inhibitors
-audio          = true          # PipeWire capture streams = calls
-tray           = true          # top-bar indicator; GNOME needs the AppIndicator extension
+presence       = true          # keyboard idle + keep-awake: GNOME IdleMonitor on Linux, ioreg/pmset on macOS (was `gnome`)
+audio          = true          # mic in use = calls: PipeWire capture streams on Linux, CoreAudio on macOS
+tray           = true          # top-bar / menu-bar indicator; GNOME needs the AppIndicator extension
 presence_every = "60s"
 audio_every    = "120s"
 shell_every    = "60s"

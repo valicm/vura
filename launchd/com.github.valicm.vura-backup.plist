@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- vura: nightly database backup after the 03:00 day boundary. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.github.valicm.vura-backup</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__HOME__/.local/bin/vura</string>
+		<string>backup</string>
+	</array>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>3</integer>
+		<key>Minute</key>
+		<integer>30</integer>
+	</dict>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/vura/backup.log</string>
+</dict>
+</plist>

@@ -24,10 +24,10 @@ idle_gap   = "30m"
 away_after = "10m"
 
 [sources]
-listen = ""            # no endpoint in demo mode
-gnome  = false
-audio  = false
-atuin  = ""
+listen   = ""          # no endpoint in demo mode
+presence = false
+audio    = false
+atuin    = ""
 
 [[anchors.slack]]
 name = "work"

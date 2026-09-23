@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -72,7 +73,7 @@ func run(log *slog.Logger, cfgPath string) error {
 	var wg sync.WaitGroup
 	errc := make(chan error, 1)
 
-	if cfg.Sources.Gnome {
+	if cfg.Sources.Presence {
 		ps, err := presence.New(st, cfg.Identity.Device, log)
 		if err != nil {
 			return fmt.Errorf("presence: %w", err)
@@ -164,14 +165,16 @@ func run(log *slog.Logger, cfgPath string) error {
 			}
 		}()
 		actions := tray.Actions{
-			// A clean exit; the unit has Restart=always, so systemd brings a
-			// fresh daemon (and a fresh tray icon) back within seconds.
+			// A clean exit; the systemd unit has Restart=always and the
+			// launchd agent KeepAlive, so a fresh daemon (and a fresh tray
+			// icon) is back within seconds.
 			Restart: func() { _ = st.Audit(context.Background(), "vurad.restart", "tray"); stop() },
-			// Ask systemd to stop the unit; it sends SIGTERM and we exit cleanly.
+			// Ask the service manager to stop us; it sends SIGTERM and we
+			// exit cleanly. launchd loads the agent again at next login.
 			Stop: func() {
 				_ = st.Audit(context.Background(), "vurad.stopped", "tray")
-				if err := exec.Command("systemctl", "--user", "stop", "--no-block", "vurad.service").Run(); err != nil {
-					log.Warn("tray: systemctl stop", "err", err)
+				if err := stopService(); err != nil {
+					log.Warn("tray: stop service", "err", err)
 					stop()
 				}
 			},
@@ -228,3 +231,15 @@ func heartbeatMinutesToday(ctx context.Context, st *store.Store, cfg *config.Con
 		`SELECT COUNT(DISTINCT CAST(ts/60 AS INTEGER)) FROM heartbeats WHERE ts >= ?`, start.Unix()).Scan(&n)
 	return time.Duration(n) * time.Minute, err
 }
+
+// stopService asks systemd (Linux) or launchd (macOS) to stop vurad. launchd
+// signals us while the command runs, so it is started, not waited on.
+func stopService() error {
+	if runtime.GOOS == "darwin" {
+		return exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchdLabel)).Start()
+	}
+	return exec.Command("systemctl", "--user", "stop", "--no-block", "vurad.service").Run()
+}
+
+// launchdLabel names the macOS LaunchAgent (launchd/*.plist).
+const launchdLabel = "com.github.valicm.vurad"
