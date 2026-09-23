@@ -145,7 +145,7 @@ func Day(ctx context.Context, st *store.Store, cfg *config.Config, res *bucket.R
 			bk = e.Bucket // the feed's default, e.g. a client workspace calendar
 		}
 		ev = append(ev, Evidence{Start: e.Start.In(cfg.Location), End: e.End.In(cfg.Location),
-			Bucket: bk, Label: e.Title, Kind: KindEvent})
+			Bucket: bk, Label: e.Title, Kind: KindEvent, Meeting: e.Title})
 	}
 
 	anchors, err := st.AnchorsRange(ctx, from, to)

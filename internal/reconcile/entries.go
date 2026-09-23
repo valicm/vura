@@ -87,6 +87,12 @@ func New(cfg *config.Config, day string, ss []session.Session, commits []store.C
 			if !first {
 				ps.Refs = nil
 			}
+			ps.Meetings = nil
+			for _, m := range s.Meetings {
+				if m.Start.Before(e.End) && (m.End.After(e.Start) || m.Start.Equal(e.Start)) {
+					ps.Meetings = append(ps.Meetings, m)
+				}
+			}
 			e.Desc, e.fallback = describe(cfg, ps, pc)
 		}
 		// Split long sessions so no single worklog exceeds max_entry.
@@ -157,7 +163,8 @@ func sameBucketCommit(c store.Commit, s session.Session) bool {
 	return strings.HasSuffix(c.Repo, "/"+s.Label)
 }
 
-// Describe builds a deterministic worklog description. Lead with ticket keys;
+// Describe builds a deterministic worklog description. Lead with meeting
+// titles from the calendar, then ticket keys;
 // list distinct commit subjects with the key stripped and filler ("Updates",
 // "Fix") dropped; fall back to external activity, then the label. Kept under
 // 250 characters.
@@ -202,8 +209,21 @@ func describe(cfg *config.Config, s session.Session, commits []store.Commit) (st
 	}
 	if len(parts) == 0 && len(s.Refs) > 0 {
 		if out := describeRefs(s.Refs); out != "" {
-			return out, false
+			parts = append(parts, out)
 		}
+	}
+	var meets []string
+	for _, m := range s.Meetings {
+		t := strings.TrimSpace(m.Title)
+		if ch, ok := strings.CutPrefix(t, "Huddle "); ok && strings.Contains(ch, "#") {
+			t = "Slack huddle (" + slackChannel(ch) + ")"
+		}
+		if t != "" && !containsStr(meets, t) {
+			meets = append(meets, t)
+		}
+	}
+	if len(meets) > 0 {
+		parts = append([]string{strings.Join(meets, ", ")}, parts...)
 	}
 	if len(parts) == 0 {
 		if s.Bucket == session.BucketCall {
@@ -235,7 +255,9 @@ func fallbackDesc(bucketLabel, bucketName, label string, tickets []string) strin
 		}
 		label = ""
 	}
-	if label == "" || bucketName == label {
+	// A repo or project that is just the bucket's name in other casing
+	// ("globex" for Globex) reads as the bucket's label.
+	if label == "" || norm(label) == norm(bucketName) || norm(label) == norm(bucketLabel) {
 		label = bucketLabel
 	}
 	if what != "" {
@@ -251,6 +273,16 @@ func fallbackDesc(bucketLabel, bucketName, label string, tickets []string) strin
 		return label
 	}
 	return label + " development"
+}
+
+func norm(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // filler reports commit subjects that say nothing a client could read:

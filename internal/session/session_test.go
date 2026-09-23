@@ -226,7 +226,8 @@ func TestCalendarOverlay(t *testing.T) {
 		{Start: at(15, 3), End: at(15, 44), Label: "Google Chrome", Kind: KindCall},
 	}
 	ss := Build(ev, nil, p)
-	if a := find(ss, "ACME"); len(a) != 1 || a[0].Label != "Roadmap sync" || a[0].Kinds[KindCall] != 1 || a[0].Kinds[KindEvent] != 1 {
+	if a := find(ss, "ACME"); len(a) != 1 || a[0].Label != "Roadmap sync" || a[0].Kinds[KindCall] != 1 || a[0].Kinds[KindEvent] != 1 ||
+		len(a[0].Meetings) != 1 || a[0].Meetings[0].Title != "Roadmap sync" {
 		t.Errorf("mapped meeting + call: %+v", ss)
 	}
 	if len(find(ss, BucketCall)) != 0 {
@@ -238,7 +239,7 @@ func TestCalendarOverlay(t *testing.T) {
 		{Start: at(15, 3), End: at(15, 44), Label: "Google Chrome", Kind: KindCall},
 	}
 	ss = Build(ev, nil, p)
-	if c := find(ss, BucketCall); len(c) != 1 || c[0].Label != "Dentist" {
+	if c := find(ss, BucketCall); len(c) != 1 || c[0].Label != "Dentist" || len(c[0].Meetings) != 1 || c[0].Meetings[0].Title != "Dentist" {
 		t.Errorf("unmapped meeting + call: %+v", ss)
 	}
 	// Mapped meeting, no call, nobody present: not confirmed, nothing logged.

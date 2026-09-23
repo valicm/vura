@@ -42,6 +42,13 @@ type Evidence struct {
 	Kind       Kind
 	Ticket     string // commits and Jira anchors
 	Ref        string // anchors: "review acme/repo#12: title", for descriptions
+	Meeting    string // calendar title: events, and calls that overlap one
+}
+
+// Meeting is a confirmed calendar event inside a session, for descriptions.
+type Meeting struct {
+	Title      string
+	Start, End time.Time
 }
 
 // Presence is one sampler row.
@@ -78,6 +85,9 @@ type Session struct {
 	Kinds   map[Kind]int
 	Tickets []string
 	Refs    []string // anchor descriptions in time order, de-duplicated
+	// Meetings: confirmed calendar events (or calls matched to one), in
+	// time order, one per title.
+	Meetings []Meeting
 	// PointsOnly: every piece of evidence is a moment (commit, anchor) with
 	// no activity signal behind it. Identity without duration: shown, never
 	// counted until the user assigns time.
@@ -230,6 +240,7 @@ func overlayEvents(ev []Evidence, tl timeline, p Params) []Evidence {
 				}
 				if e.Label != "" {
 					c.Label = e.Label
+					c.Meeting = e.Label
 				}
 			}
 		}
@@ -411,6 +422,24 @@ func cluster(ev []Evidence, tl timeline, p Params) []Session {
 		}
 		if e.Ref != "" && !contains(cur.Refs, e.Ref) {
 			cur.Refs = append(cur.Refs, e.Ref)
+		}
+		meeting := e.Meeting
+		if e.Kind == KindEvent && meeting == "" {
+			meeting = e.Label
+		}
+		if meeting != "" {
+			seen := false
+			for i, m := range cur.Meetings {
+				if m.Title == meeting {
+					seen = true
+					if e.End.After(m.End) {
+						cur.Meetings[i].End = e.End
+					}
+				}
+			}
+			if !seen {
+				cur.Meetings = append(cur.Meetings, Meeting{Title: meeting, Start: e.Start, End: e.End})
+			}
 		}
 		if e.Kind == KindClaude {
 			if idle, ok := tl.idleAt(e.Start); ok && idle > p.IdleGap {

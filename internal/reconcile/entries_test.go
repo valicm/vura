@@ -282,3 +282,31 @@ func TestMergeAcrossBucketsAndDedupe(t *testing.T) {
 		t.Errorf("ACME+BETA: %+v", e)
 	}
 }
+
+func TestDescribeMeetingsAndLabels(t *testing.T) {
+	c := cfg()
+	c.Buckets["GLOBEX"] = config.Bucket{Issue: "EXT-9", Label: "Globex"}
+	if got := Describe(c, sess("GLOBEX", "globex", at(9, 0), at(10, 0)), nil); got != "Globex development" {
+		t.Errorf("label casing: %q", got)
+	}
+	if got := Describe(c, sess("GLOBEX", "glo-bex", at(9, 0), at(10, 0), "GLX-1"), nil); got != "GLX-1 Globex" {
+		t.Errorf("label punctuation: %q", got)
+	}
+	call := sess(session.BucketCall, "Weekly sync", at(11, 0), at(11, 30))
+	call.Meetings = []session.Meeting{{Title: "Weekly sync", Start: at(11, 0), End: at(11, 30)}}
+	if got := Describe(c, call, nil); got != "Weekly sync" {
+		t.Errorf("call with meeting: %q", got)
+	}
+	call.Meetings = []session.Meeting{{Title: "Huddle acme#dm-jane.doe", Start: at(11, 0), End: at(11, 30)}}
+	if got := Describe(c, call, nil); got != "Slack huddle (DM jane.doe)" {
+		t.Errorf("huddle: %q", got)
+	}
+	// A long session with a standup at 09:15 and a review at 15:00, split at 4h.
+	s := sess("ACME", "Acme", at(9, 0), at(17, 0), "ACME-7")
+	s.Meetings = []session.Meeting{{Title: "Daily standup", Start: at(9, 15), End: at(9, 30)}, {Title: "Release review", Start: at(15, 0), End: at(15, 30)}}
+	commits := []store.Commit{{TS: at(10, 0), Repo: "/h/Acme", Ticket: "ACME-7", Subject: "ACME-7 Cart fix"}}
+	d := New(c, "2026-09-04", []session.Session{s}, commits, nil)
+	if len(d.Entries) != 2 || d.Entries[0].Desc != "Daily standup · ACME-7 Cart fix" || d.Entries[1].Desc != "Release review" {
+		t.Errorf("parts: %+v", d.Entries)
+	}
+}
