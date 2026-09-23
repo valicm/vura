@@ -209,6 +209,18 @@ func describe(cfg *config.Config, s session.Session, commits []store.Commit) (st
 	}
 	if len(parts) == 0 && len(s.Refs) > 0 {
 		if out := describeRefs(s.Refs); out != "" {
+			// Tickets seen in the session (browser, anchors) that the
+			// activity text does not name lead, so a Slack-only text
+			// still says what the conversation was about.
+			var missing []string
+			for _, t := range s.Tickets {
+				if !strings.Contains(out, t) {
+					missing = append(missing, t)
+				}
+			}
+			if len(missing) > 0 {
+				out = strings.Join(missing, ", ") + " · " + out
+			}
 			parts = append(parts, out)
 		}
 	}

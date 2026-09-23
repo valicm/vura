@@ -310,3 +310,12 @@ func TestDescribeMeetingsAndLabels(t *testing.T) {
 		t.Errorf("parts: %+v", d.Entries)
 	}
 }
+
+func TestRefsLeadWithUnnamedTickets(t *testing.T) {
+	c := cfg()
+	s := sess("ACME", "Acme", at(9, 0), at(10, 0), "ACME-1", "ACME-2")
+	s.Refs = []string{"comment ACME-2: Checkout", "message acme#dm-jane.doe"}
+	if got := Describe(c, s, nil); got != "ACME-1 · ACME-2 Checkout; Team communication on Slack (DM jane.doe)" {
+		t.Errorf("got %q", got)
+	}
+}
