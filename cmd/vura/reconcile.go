@@ -567,7 +567,7 @@ func printHelp() {
 	fmt.Print(`
   enter / ok       accept: push every assigned entry to Tempo, mark the day done
   e N 1h30m        set logged time of entry N (observed time is kept for the record)
-  m N M [K..]      merge entries into N: observed adds up, rounding applies once
+  m N M [K..]      merge entries into N (any bucket; N's wins): observed adds up, rounding applies once
   a N BUCKET       assign an unattributed / call / unmapped entry to a bucket
   t N 10:15-11:30  move entry N to another time window (observed and logged follow)
   d N text         set the description of entry N

@@ -85,9 +85,6 @@ func TestEdits(t *testing.T) {
 	if m.Observed != 15*time.Minute || m.Logged != 15*time.Minute || !d.Entries[3].Dropped || m.End != at(17, 29) {
 		t.Errorf("merge: %+v", m)
 	}
-	if err := d.Merge(2, 3); err == nil {
-		t.Error("cross-bucket merge must fail")
-	}
 	if err := d.Assign(2, "ACME"); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +130,7 @@ func TestDescribeRefs(t *testing.T) {
 		"approve acme/webshop#12: Drupal 11", "comment acme/webshop#12: Drupal 11", "comment acme/webshop#12: Drupal 11",
 		"transition ACME-8600: Report → In Review", "pr opened acme/x#3: Thing",
 	})
-	want := "Approved acme/webshop#12: Drupal 11; Commented on acme/webshop#12: Drupal 11; Moved ACME-8600: Report → In Review; Opened PR acme/x#3: Thing"
+	want := "Approved, commented on acme/webshop#12: Drupal 11; ACME-8600 Report → In Review; Opened PR acme/x#3: Thing"
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
@@ -198,5 +195,90 @@ func TestSetSlot(t *testing.T) {
 	}
 	if d2.Entries[0].Observed != 90*time.Minute {
 		t.Errorf("replay: %+v", d2.Entries[0])
+	}
+}
+
+func TestDescribeRefsNoise(t *testing.T) {
+	got := describeRefs([]string{
+		"push acme/web: 0 commits to main", "message acme#team-dev",
+		"comment SHOP-42: Order export", "update SHOP-42: Order export",
+		"message acme#dm-jane.doe", "message acme#mpdm-jane.doe--john.roe--acme-1",
+		"push acme/web: 3 commits to develop",
+	})
+	want := "SHOP-42 Order export; Pushed to acme/web: 3 commits to develop; Team communication on Slack (#team-dev, DM jane.doe, group DM jane.doe, john.roe)"
+	if got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+	if got := describeRefs([]string{"push acme/web: 0 commits to main"}); got != "" {
+		t.Errorf("empty pushes only: %q", got)
+	}
+}
+
+func TestDescribeFillerAndHosts(t *testing.T) {
+	c := cfg()
+	s := sess("ACME", "acme-site", at(9, 0), at(10, 0))
+	commits := []store.Commit{
+		{TS: at(9, 1), Subject: "Updates"}, {TS: at(9, 2), Subject: "Fix"}, {TS: at(9, 3), Subject: "Payment gateways"},
+	}
+	if got := Describe(c, s, commits); got != "Payment gateways" {
+		t.Errorf("filler: %q", got)
+	}
+	if got := Describe(c, s, commits[:2]); got != "acme-site development" {
+		t.Errorf("only filler: %q", got)
+	}
+	if got := Describe(c, sess("BETA", "acme.atlassian.net", at(9, 0), at(10, 0)), nil); got != "BETA Jira ticket work" {
+		t.Errorf("jira host: %q", got)
+	}
+	if got := Describe(c, sess("BETA", "shop.ddev.site", at(9, 0), at(10, 0)), nil); got != "BETA development" {
+		t.Errorf("site host: %q", got)
+	}
+}
+
+func TestSplitDescribesEachPart(t *testing.T) {
+	c := cfg()
+	ss := []session.Session{sess("ACME", "Acme", at(9, 0), at(18, 0))} // 9h -> 4h + 4h + 1h
+	commits := []store.Commit{
+		{TS: at(10, 0), Repo: "/h/Acme", Subject: "Morning work"},
+		{TS: at(14, 30), Repo: "/h/Acme", Subject: "Afternoon work"},
+	}
+	d := New(c, "2026-09-04", ss, commits, nil)
+	if len(d.Entries) != 3 {
+		t.Fatalf("want 3 parts, got %d", len(d.Entries))
+	}
+	if d.Entries[0].Desc != "Morning work" || d.Entries[1].Desc != "Afternoon work" || d.Entries[2].Desc != "Acme development" {
+		t.Errorf("parts: %q | %q | %q", d.Entries[0].Desc, d.Entries[1].Desc, d.Entries[2].Desc)
+	}
+}
+
+func TestMergeAcrossBucketsAndDedupe(t *testing.T) {
+	c := cfg()
+	ss := []session.Session{
+		sess("ACME", "Acme", at(9, 0), at(10, 0), "ACME-1"),
+		sess("BETA", "beta-shop", at(11, 0), at(11, 30)),
+		sess(session.BucketUnattributed, "", at(12, 0), at(12, 20)),
+		sess("ACME", "Acme", at(13, 0), at(14, 0), "ACME-1"),
+	}
+	commits := []store.Commit{
+		{TS: at(9, 10), Repo: "/h/Acme", Ticket: "ACME-1", Subject: "Merge branch 'x'"},
+		{TS: at(13, 10), Repo: "/h/Acme", Ticket: "ACME-1", Subject: "ACME-1 Cross sell"},
+	}
+	d := New(c, "2026-09-04", ss, commits, nil)
+	if err := d.Merge(1, 4); err != nil {
+		t.Fatal(err)
+	}
+	if d.Entries[0].Desc != "ACME-1 Cross sell" {
+		t.Errorf("dedupe: %q", d.Entries[0].Desc)
+	}
+	if err := d.Merge(3, 2); err != nil { // unassigned first takes BETA
+		t.Fatal(err)
+	}
+	if e := d.Entries[2]; e.Bucket != "BETA" || e.Issue != "EXT-48" || e.Observed != 50*time.Minute || e.Desc != "beta-shop development" {
+		t.Errorf("unassigned+BETA: %+v", e)
+	}
+	if err := d.Merge(1, 3); err != nil {
+		t.Fatal(err)
+	}
+	if e := d.Entries[0]; e.Bucket != "ACME" || e.Observed != 2*time.Hour+50*time.Minute {
+		t.Errorf("ACME+BETA: %+v", e)
 	}
 }

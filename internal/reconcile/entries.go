@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valicm/vura/internal/bucket"
 	"github.com/valicm/vura/internal/config"
 	"github.com/valicm/vura/internal/session"
 	"github.com/valicm/vura/internal/store"
@@ -37,6 +38,7 @@ type Entry struct {
 	Identity bool     // moments only (commits, anchors): zero time until edited
 
 	origBucket string // bucket at build time; part of the entry's stable key
+	fallback   bool   // Desc is the generic label fallback, safe to reword on assign
 }
 
 // Day is the reconcile state for one working day.
@@ -67,21 +69,40 @@ func New(cfg *config.Config, day string, ss []session.Session, commits []store.C
 			e.Issue = cfg.Buckets[s.Bucket].Issue
 		}
 		e.Logged = session.RoundUp(e.Observed, round)
+		e.AutoDesc = true
 		cs := commitsIn(commits, s)
-		for _, c := range cs {
-			e.Commits = append(e.Commits, c.Subject)
+		// Each part describes only the commits made inside it, so a split
+		// session does not repeat the whole session's text on every part.
+		// Refs carry no timestamps; they go to the first part only.
+		describePart := func(e *Entry, last, first bool) {
+			var pc []store.Commit
+			e.Commits = nil
+			for _, c := range cs {
+				if !c.TS.Before(e.Start) && (c.TS.Before(e.End) || last && !c.TS.After(e.End)) {
+					pc = append(pc, c)
+					e.Commits = append(e.Commits, c.Subject)
+				}
+			}
+			ps := s
+			if !first {
+				ps.Refs = nil
+			}
+			e.Desc, e.fallback = describe(cfg, ps, pc)
 		}
-		e.Desc, e.AutoDesc = Describe(cfg, s, cs), true
 		// Split long sessions so no single worklog exceeds max_entry.
+		first := true
 		for maxEntry > 0 && e.Logged > maxEntry {
 			part := e
 			part.End = part.Start.Add(maxEntry)
 			part.Observed, part.Logged = maxEntry, maxEntry
+			describePart(&part, false, first)
 			d.Entries = append(d.Entries, part)
+			first = false
 			e.Start = part.End
 			e.Observed -= maxEntry
 			e.Logged -= maxEntry
 		}
+		describePart(&e, true, first)
 		d.Entries = append(d.Entries, e)
 	}
 	for _, n := range notes {
@@ -137,28 +158,16 @@ func sameBucketCommit(c store.Commit, s session.Session) bool {
 }
 
 // Describe builds a deterministic worklog description. Lead with ticket keys;
-// list distinct commit subjects with the key stripped; fall back to the
-// label. Kept under 250 characters.
+// list distinct commit subjects with the key stripped and filler ("Updates",
+// "Fix") dropped; fall back to external activity, then the label. Kept under
+// 250 characters.
 func Describe(cfg *config.Config, s session.Session, commits []store.Commit) string {
-	if len(commits) == 0 && len(s.Refs) > 0 {
-		return describeRefs(s.Refs)
-	}
-	if len(commits) == 0 {
-		label := s.Label
-		if b, ok := cfg.Buckets[s.Bucket]; ok && b.Label != "" && (label == "" || s.Bucket == label) {
-			label = b.Label
-		}
-		if s.Bucket == session.BucketCall {
-			return "Call"
-		}
-		if label == "" {
-			return ""
-		}
-		if len(s.Tickets) > 0 {
-			return strings.Join(s.Tickets, ", ") + " " + label
-		}
-		return label + " development"
-	}
+	d, _ := describe(cfg, s, commits)
+	return d
+}
+
+// describe also reports whether the text is the generic label fallback.
+func describe(cfg *config.Config, s session.Session, commits []store.Commit) (string, bool) {
 	byTicket := map[string][]string{}
 	var order []string
 	seen := map[string]bool{}
@@ -166,13 +175,14 @@ func Describe(cfg *config.Config, s session.Session, commits []store.Commit) str
 		key := c.Ticket
 		if _, ok := byTicket[key]; !ok {
 			order = append(order, key)
+			byTicket[key] = nil
 		}
 		subj := strings.TrimSpace(c.Subject)
 		if key != "" {
 			subj = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(subj, key), ":"))
 			subj = strings.TrimSpace(strings.TrimPrefix(subj, "-"))
 		}
-		if subj == "" || seen[strings.ToLower(subj)] || strings.HasPrefix(subj, "Merge ") || strings.HasPrefix(subj, "Revert \"Merge ") {
+		if subj == "" || seen[strings.ToLower(subj)] || filler(subj) || strings.HasPrefix(subj, "Merge ") || strings.HasPrefix(subj, "Revert \"Merge ") {
 			continue
 		}
 		seen[strings.ToLower(subj)] = true
@@ -190,21 +200,102 @@ func Describe(cfg *config.Config, s session.Session, commits []store.Commit) str
 			parts = append(parts, strings.Join(subs, "; "))
 		}
 	}
-	out := strings.Join(parts, " · ")
-	if len(out) > 250 {
-		out = out[:247] + "..."
+	if len(parts) == 0 && len(s.Refs) > 0 {
+		if out := describeRefs(s.Refs); out != "" {
+			return out, false
+		}
 	}
-	return out
+	if len(parts) == 0 {
+		if s.Bucket == session.BucketCall {
+			return "Call", false
+		}
+		out := fallbackDesc(cfg.Buckets[s.Bucket].Label, s.Bucket, s.Label, s.Tickets)
+		return out, true
+	}
+	return clip(strings.Join(parts, " · ")), false
 }
 
-// describeRefs words external activity: "Reviewed acme/repo#12 Drupal 11; commented on AUC-8600 Bug".
+// fallbackDesc words a session with nothing more specific to say. A browser
+// hostname is never shown as the label: "acme.atlassian.net
+// development" tells the client nothing.
+func fallbackDesc(bucketLabel, bucketName, label string, tickets []string) string {
+	if bucketLabel == "" {
+		bucketLabel = bucketName
+	}
+	what := ""
+	if strings.Contains(label, ".") {
+		host := strings.ToLower(label)
+		switch {
+		case strings.Contains(host, "atlassian.net") || strings.Contains(host, "jira"):
+			what = "Jira ticket work"
+		case strings.Contains(host, "gitlab"):
+			what = "GitLab merge requests"
+		case strings.Contains(host, "github"):
+			what = "GitHub pull requests"
+		}
+		label = ""
+	}
+	if label == "" || bucketName == label {
+		label = bucketLabel
+	}
+	if what != "" {
+		label = strings.TrimSpace(bucketLabel + " " + what)
+	}
+	if label == "" {
+		return ""
+	}
+	if len(tickets) > 0 {
+		return strings.Join(tickets, ", ") + " " + label
+	}
+	if what != "" {
+		return label
+	}
+	return label + " development"
+}
+
+// filler reports commit subjects that say nothing a client could read:
+// "Updates", "Fix", "WIP", "Minor things".
+func filler(subj string) bool {
+	s := strings.ToLower(strings.Trim(subj, " .!…"))
+	switch s {
+	case "update", "updates", "udates", "updated", "fix", "fixes", "fixed", "fixup", "wip", "change", "changes",
+		"cleanup", "cleanups", "clean up", "minor", "minor things", "minor fixes", "tweaks", "misc", "stuff", "more",
+		"test", "tests", "tmp", "temp", "save", "commit", "-", ".":
+		return true
+	}
+	return false
+}
+
+func clip(s string) string {
+	if len(s) > 250 {
+		return s[:247] + "..."
+	}
+	return s
+}
+
+// describeRefs words external activity. Activity on the same PR, MR or ticket
+// is one item ("Approved, commented on acme/webshop#12: Drupal 11"; a Jira
+// ticket is just "ACME-8600 Report → In Review"); empty pushes are dropped;
+// Slack messages collapse into one trailing item.
 func describeRefs(refs []string) string {
 	verbs := map[string]string{"review": "Reviewed", "approve": "Approved", "comment": "Commented on",
 		"transition": "Moved", "update": "Updated", "push": "Pushed to", "message": "Messaged in"}
-	var parts []string
-	seen := map[string]bool{}
+	type item struct {
+		target, title, status string
+		verbs                 []string
+		jira                  bool
+	}
+	var items []*item
+	byTarget := map[string]*item{}
+	var chans []string
 	for _, r := range refs {
 		kind, rest, _ := strings.Cut(r, " ")
+		if kind == "message" {
+			if c := slackChannel(rest); c != "" && !containsStr(chans, c) {
+				chans = append(chans, c)
+			}
+			continue
+		}
 		verb := verbs[kind]
 		if verb == "" {
 			verb = strings.ToUpper(kind[:1]) + kind[1:]
@@ -212,18 +303,118 @@ func describeRefs(refs []string) string {
 				verb, rest = strings.ToUpper(k2[:1])+k2[1:]+" "+strings.ToUpper(kind), r2
 			}
 		}
-		key := verb + " " + rest
-		if seen[key] {
+		target, title, _ := strings.Cut(rest, ": ")
+		if kind == "push" && strings.HasPrefix(title, "0 commits") {
 			continue
 		}
-		seen[key] = true
-		parts = append(parts, key)
+		key := target
+		if kind == "push" {
+			key = "push " + target + " " + title
+		}
+		it := byTarget[key]
+		if it == nil {
+			ts := bucket.Tickets(target)
+			it = &item{target: target, jira: len(ts) == 1 && ts[0] == target}
+			byTarget[key] = it
+			items = append(items, it)
+		}
+		if it.jira {
+			if sum, st, ok := strings.Cut(title, " → "); ok {
+				title, it.status = sum, st
+			}
+		}
+		if it.title == "" {
+			it.title = title
+		}
+		if !containsStr(it.verbs, verb) {
+			it.verbs = append(it.verbs, verb)
+		}
 	}
-	out := strings.Join(parts, "; ")
-	if len(out) > 250 {
-		out = out[:247] + "..."
+	var parts []string
+	for _, it := range items {
+		var p string
+		if it.jira {
+			p = strings.TrimSpace(it.target + " " + it.title)
+			if it.status != "" {
+				p += " → " + it.status
+			}
+		} else {
+			vs := make([]string, len(it.verbs))
+			for i, v := range it.verbs {
+				if i > 0 {
+					v = strings.ToLower(v[:1]) + v[1:]
+				}
+				vs[i] = v
+			}
+			p = strings.Join(vs, ", ") + " " + it.target
+			if it.title != "" {
+				p += ": " + it.title
+			}
+		}
+		parts = append(parts, p)
 	}
-	return out
+	if len(chans) > 0 {
+		parts = append(parts, "Team communication on Slack ("+strings.Join(chans, ", ")+")")
+	}
+	return clip(strings.Join(parts, "; "))
+}
+
+// slackChannel turns "acme#team-dev" into "#team-dev",
+// "acme#dm-jane.doe" into "DM jane.doe" and an mpdm into a group DM.
+func slackChannel(ref string) string {
+	ws, ch, ok := strings.Cut(ref, "#")
+	if !ok {
+		ch, ws = ref, ""
+	}
+	switch {
+	case strings.HasPrefix(ch, "dm-"):
+		return "DM " + strings.TrimPrefix(ch, "dm-")
+	case strings.HasPrefix(ch, "mpdm-"):
+		ch = strings.TrimPrefix(ch, "mpdm-")
+		if i := strings.LastIndex(ch, "-"); i > 0 && strings.Trim(ch[i+1:], "0123456789") == "" {
+			ch = ch[:i]
+		}
+		var who []string
+		for _, n := range strings.Split(ch, "--") {
+			if n != "" && n != ws {
+				who = append(who, n)
+			}
+		}
+		return "group DM " + strings.Join(who, ", ")
+	case ch == "":
+		return ""
+	}
+	return "#" + ch
+}
+
+// joinDesc appends b's " · " segments to a, skipping ones already present
+// and bare ticket keys that another segment already leads with.
+func joinDesc(a, b string) string {
+	var segs []string
+	add := func(s string) {
+		for _, p := range strings.Split(s, " · ") {
+			if p = strings.TrimSpace(p); p != "" && !containsStr(segs, p) {
+				segs = append(segs, p)
+			}
+		}
+	}
+	add(a)
+	add(b)
+	var out []string
+	for _, p := range segs {
+		bare := len(bucket.Tickets(p)) == 1 && bucket.Tickets(p)[0] == p
+		dup := false
+		for _, q := range segs {
+			if bare && q != p && strings.HasPrefix(q, p+" ") {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, " · ")
 }
 
 // --- edits -------------------------------------------------------------------
@@ -293,7 +484,7 @@ func (d *Day) Assign(n int, bucket string) error {
 	if e.Kind == "presence" || e.Kind == "unmapped" || e.Kind == "call" {
 		e.Kind = "session"
 	}
-	if e.AutoDesc && (e.Desc == "" || strings.HasSuffix(e.Desc, " development") || e.Desc == "Call") {
+	if e.AutoDesc && (e.Desc == "" || e.fallback || e.Desc == "Call") {
 		label := b.Label
 		if label == "" {
 			label = bucket
@@ -301,8 +492,9 @@ func (d *Day) Assign(n int, bucket string) error {
 		if e.Desc == "Call" {
 			e.Desc = label + " call"
 		} else {
-			e.Desc = label + " development"
+			e.Desc = fallbackDesc(b.Label, bucket, e.Label, e.Tickets)
 		}
+		e.fallback = e.Desc != label+" call"
 	}
 	return nil
 }
@@ -331,8 +523,13 @@ func (d *Day) Merge(ns ...int) error {
 		if err != nil {
 			return err
 		}
-		if e.Bucket != first.Bucket {
-			return fmt.Errorf("entry %d is %s, entry %d is %s; assign first", n, orNone(e.Bucket), ns[0], orNone(first.Bucket))
+		// Entries from different buckets combine into the first one's
+		// bucket; an unassigned first entry takes the other's.
+		if first.Bucket == "" && e.Bucket != "" {
+			first.Bucket, first.Issue = e.Bucket, e.Issue
+			if first.Kind != "note" {
+				first.Kind = "session"
+			}
 		}
 		first.Observed += e.Observed
 		first.Logged = session.RoundUp(first.Observed, d.cfg.Session.RoundMin.Duration)
@@ -347,13 +544,14 @@ func (d *Day) Merge(ns ...int) error {
 				first.Tickets = append(first.Tickets, t)
 			}
 		}
-		if e.Desc != "" && e.Desc != first.Desc && !strings.Contains(first.Desc, e.Desc) {
-			if first.Desc == "" || first.AutoDesc && strings.HasSuffix(first.Desc, " development") {
-				first.Desc = e.Desc
-			} else {
-				first.Desc += " · " + e.Desc
-			}
+		switch {
+		case e.Desc == "" || e.fallback && first.Desc != "":
+		case first.Desc == "" || first.AutoDesc && first.fallback:
+			first.Desc, first.fallback = e.Desc, e.fallback
+		default:
+			first.Desc = joinDesc(first.Desc, e.Desc)
 		}
+		first.Identity = first.Identity && e.Identity
 		first.Remote = first.Remote || e.Remote
 		first.Commits = append(first.Commits, e.Commits...)
 		first.Merged = append(first.Merged, n)

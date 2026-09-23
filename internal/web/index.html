@@ -98,6 +98,7 @@ button:disabled { opacity:.5; cursor:default; }
 button.sm { font-size:11.5px; padding:2px 7px; }
 input, select { font:inherit; font-size:13px; padding:4px 7px; border-radius:6px; border:1px solid var(--rule); background:var(--surface); color:var(--text); }
 input.dur { width:64px; }
+.slot input[type=time] { font:inherit; padding:2px 4px; width:6.2em; color-scheme:light dark; }
 input.text { width:100%; }
 .rowtools { display:flex; gap:5px; flex-wrap:wrap; margin-top:6px; align-items:center; }
 .rowtools select { font-size:12px; padding:2px 5px; }
@@ -254,11 +255,11 @@ async function loadDay() {
         <input class="text" style="width:auto;flex:1;min-width:160px" data-k="${esc(e.key)}" placeholder="description" value="${esc(e.bucket ? e.desc : '')}" ${e.bucket?'':'disabled'}>
         ${e.bucket ? `<button class="sm claude" data-k="${esc(e.key)}" title="ask Claude to word it">✨</button>` : ''}
         <button class="sm danger drop" data-k="${esc(e.key)}">drop</button></div>` : '';
-    return `<tr class="${selectedKeys.has(e.key)?'selected':''}"><td class="sel">${editable ? `<input type="checkbox" class="pick" data-k="${esc(e.key)}" ${selectedKeys.has(e.key)?'checked':''} ${e.bucket===''?'disabled':''}>` : `<span class="n mono">${e.n}</span>`}</td>
+    return `<tr class="${selectedKeys.has(e.key)?'selected':''}"><td class="sel">${editable ? `<input type="checkbox" class="pick" data-k="${esc(e.key)}" ${selectedKeys.has(e.key)?'checked':''} title="tick two or more to merge">` : `<span class="n mono">${e.n}</span>`}</td>
       <td><span class="dot" style="background:${colorFor(e.bucket || (e.kind==='call'?'call':e.kind==='unmapped'?'?':''))}"></span>${who}${flags}
         ${e.detail ? `<span class="detail">${esc(e.detail)}</span>` : ''}
         ${!editable && e.bucket && e.desc ? `<span class="desc ${e.auto?'auto':''}">“${esc(e.desc)}”</span>` : ''}${tools}</td>
-      <td class="mono" style="white-space:nowrap">${editable ? `<input class="slot" data-k="${esc(e.key)}" value="${t(e.start)}-${t(e.end)}" size="11" style="font:inherit;width:8.5em" title="time window, HH:MM-HH:MM">` : `${t(e.start)}–${t(e.end)}`}</td>
+      <td class="mono" style="white-space:nowrap">${editable ? `<span class="slot" data-k="${esc(e.key)}"><input type="time" class="slot-a" value="${t(e.start)}" title="start">–<input type="time" class="slot-b" value="${t(e.end)}" title="end"></span>` : `${t(e.start)}–${t(e.end)}`}</td>
       <td class="h mono">${e.identity ? '0m' : hm(e.logged)}</td></tr>`;
   }).join('');
   const meet = (d.meetings||[]).map(m => `<span><span class="dot" style="background:transparent;border:1.5px solid ${colorFor(m.bucket)}"></span>${t(m.start)} ${esc(m.title)}</span>`).join('');
@@ -270,7 +271,7 @@ async function loadDay() {
   const nsel = selectedKeys.size;
   const actions = editable ? `<div class="noteform"><span class="k" style="color:var(--muted)">NOTE</span><select id="note-b">${opts('')}</select><input class="dur" id="note-d" placeholder="1h"><input class="text" id="note-t" placeholder="work nothing observed (phone call, whiteboard)"><button id="note-add" class="sm">add</button></div>
     <div class="actions">
-      <button id="act-merge" ${nsel<2?'disabled':''}>Merge ${nsel>1?nsel+' selected':'selected'}</button>
+      <button id="act-merge" ${nsel<2?'disabled':''} title="combine into the first one you ticked; it keeps that bucket">Merge ${nsel>1?nsel+' selected':'selected'}</button>
       <button id="act-claude">✨ Describe all</button>
       <span class="spacer"></span>
       <button id="act-reset" ${d.edits?'':'disabled'}>Reset edits</button>
@@ -288,7 +289,13 @@ async function loadDay() {
   document.querySelectorAll('input.dur[data-k]').forEach(inp => inp.onchange = () => inp.value.trim() && doOp({op:'logged', target: inp.dataset.k, dur: inp.value.trim()}));
   document.querySelectorAll('input.text[data-k]').forEach(inp => inp.onchange = () => doOp({op:'desc', target: inp.dataset.k, text: inp.value}));
   document.querySelectorAll('.drop').forEach(b => b.onclick = () => doOp({op:'drop', target: b.dataset.k}));
-  document.querySelectorAll('input.slot').forEach(inp => inp.onchange = () => { const [a, b] = inp.value.split('-'); if (a && b) doOp({op:'slot', target: inp.dataset.k, at: a.trim(), text: b.trim()}); });
+  // Time pickers fire change on every arrow step, so commit only when focus leaves the pair (or on Enter).
+  document.querySelectorAll('span.slot').forEach(sp => {
+    const a = sp.querySelector('.slot-a'), b = sp.querySelector('.slot-b'), was = a.value + '-' + b.value;
+    const commit = () => { if (a.value && b.value && a.value + '-' + b.value !== was) doOp({op:'slot', target: sp.dataset.k, at: a.value, text: b.value}); };
+    sp.addEventListener('focusout', ev => { if (!sp.contains(ev.relatedTarget)) commit(); });
+    sp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); commit(); } });
+  });
   document.querySelectorAll('.claude').forEach(b => b.onclick = () => { note('asking Claude…'); doOp({op:'claude', target: b.dataset.k}); });
   const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
   on('#act-merge', () => { const ks = [...selectedKeys]; doOp({op:'merge', target: ks[0], others: ks.slice(1)}); });
@@ -363,6 +370,7 @@ function refresh() { loadOverview(); if (selected && !document.activeElement.mat
 refresh(); setInterval(refresh, 60000);
 document.addEventListener('keydown', e => {
   if (!selected || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+  if (e.target.matches('input, select, textarea')) return;
   const days = [...document.querySelectorAll('.dayrow')].map(x => x.dataset.day);
   const i = days.indexOf(selected) + (e.key === 'ArrowLeft' ? 1 : -1);
   if (i >= 0 && i < days.length) { selected = days[i]; loadOverview(); loadDay(); }
