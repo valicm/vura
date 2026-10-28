@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- vura: notify about pending days at 10:00 (after the standup) and 19:00.
+     launchd runs a missed interval when the Mac wakes, like Persistent=true. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.github.valicm.vura-nag</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__HOME__/.local/bin/vura</string>
+		<string>nag</string>
+	</array>
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Hour</key>
+			<integer>10</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>19</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/vura/nag.log</string>
+</dict>
+</plist>

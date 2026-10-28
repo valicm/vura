@@ -232,7 +232,7 @@ func (s *Store) InsertHeartbeat(ctx context.Context, h Heartbeat) error {
 // --- audio --------------------------------------------------------------
 
 type AudioStream struct {
-	Stream string // pactl index
+	Stream string // pactl index on Linux, "pid:N" on macOS
 	App    string
 	Binary string
 	Media  string

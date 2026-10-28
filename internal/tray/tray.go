@@ -1,6 +1,9 @@
+//go:build !darwin || cgo
+
 // Package tray puts vura in the GNOME top bar as a StatusNotifierItem (the
-// AppIndicator extension renders it). The menu shows today's totals and the
-// queue and opens the dashboard. Pure Go over D-Bus; no cgo.
+// AppIndicator extension renders it) or in the macOS menu bar. The menu shows
+// today's totals and the queue and opens the dashboard. On Linux it is pure
+// Go over D-Bus; on macOS it needs cgo (AppKit).
 package tray
 
 import (
@@ -8,6 +11,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"time"
 
 	"fyne.io/systray"
@@ -31,12 +35,14 @@ type Actions struct {
 }
 
 // Run blocks until ctx is done. status is polled every minute. It must be
-// called from the main goroutine on some platforms; on Linux any goroutine
-// works, but main keeps it simple.
+// called from the main goroutine: macOS runs the menu on the main thread
+// (see lock_darwin.go); on Linux any goroutine works, but main keeps it simple.
 func Run(ctx context.Context, url, dataDir string, status func(context.Context) (Status, error), act Actions, log *slog.Logger) {
 	onReady := func() {
 		systray.SetIcon(icon)
-		systray.SetTitle("vura")
+		if runtime.GOOS != "darwin" {
+			systray.SetTitle("vura") // macOS would print it next to the icon
+		}
 		systray.SetTooltip("vura")
 		today := systray.AddMenuItem("today: –", "observed · logged")
 		today.Disable()
@@ -46,8 +52,8 @@ func Run(ctx context.Context, url, dataDir string, status func(context.Context) 
 		open := systray.AddMenuItem("Open dashboard", "app window on the local daemon")
 		refresh := systray.AddMenuItem("Refresh", "")
 		systray.AddSeparator()
-		restart := systray.AddMenuItem("Restart vurad", "exit and let systemd start it again")
-		stop := systray.AddMenuItem("Stop vurad", "stop collecting until `systemctl --user start vurad` or next login")
+		restart := systray.AddMenuItem("Restart vurad", "exit and let the service manager start it again")
+		stop := systray.AddMenuItem("Stop vurad", "stop collecting until it is started again or next login")
 		update := func() {
 			s, err := status(ctx)
 			if err != nil {

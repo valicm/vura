@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- vura collector daemon: the macOS counterpart of systemd/vurad.service.
+     Runs in the GUI session (menu bar, pmset, CoreAudio), started at login
+     and restarted on any exit. `make install` fills in __HOME__. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.github.valicm.vurad</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__HOME__/.local/bin/vurad</string>
+	</array>
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>Nice</key>
+	<integer>10</integer>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<!-- `claude` for descriptions, git and atuin must be findable. -->
+		<key>PATH</key>
+		<string>__HOME__/.local/bin:__HOME__/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>__HOME__/Library/Logs/vura/vurad.log</string>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/vura/vurad.log</string>
+</dict>
+</plist>

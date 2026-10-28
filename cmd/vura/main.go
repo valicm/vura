@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/valicm/vura/internal/config"
+	"github.com/valicm/vura/internal/secrets"
 	"github.com/valicm/vura/internal/store"
 )
 
@@ -40,14 +41,14 @@ usage:
   vura report [--month YYYY-MM] [--html FILE] [--all]   pushed worklogs per bucket
   vura version
 
-tokens: VURA_TEMPO_TOKEN / VURA_JIRA_TOKEN, or the GNOME keyring:
-  secret-tool store --label='vura tempo' service vura key tempo
-  secret-tool store --label='vura jira'  service vura key jira
+tokens: VURA_TEMPO_TOKEN / VURA_JIRA_TOKEN, or the keyring (GNOME keyring / macOS Keychain):
+  %s
+  %s
 
 env:
   VURA_CONFIG   config path (default %s)
   VURA_DATA     data dir    (default ~/.local/share/vura)
-`, version, config.Path())
+`, version, secrets.StoreHint("tempo"), secrets.StoreHint("jira"), config.Path())
 }
 
 func main() {
