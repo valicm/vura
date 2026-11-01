@@ -35,7 +35,7 @@ type Runner struct {
 
 // maxCatchup bounds how far back a source looks after a long outage (a VPN
 // that was off for a week, a token that expired).
-const maxCatchup = 30 * 24 * time.Hour
+const maxCatchup = 31 * 24 * time.Hour
 
 // New builds sources from config. A source whose token is missing is
 // skipped with one warning; the rest still run.

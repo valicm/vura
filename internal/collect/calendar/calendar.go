@@ -31,7 +31,7 @@ type Collector struct {
 
 func New(name, url, bucket string, st *store.Store, loc *time.Location, log *slog.Logger) *Collector {
 	return &Collector{name: name, url: url, bucket: bucket, store: st, loc: loc, log: log,
-		http: &http.Client{Timeout: 60 * time.Second}, Back: 30 * 24 * time.Hour, Ahead: 7 * 24 * time.Hour}
+		http: &http.Client{Timeout: 60 * time.Second}, Back: 31 * 24 * time.Hour, Ahead: 7 * 24 * time.Hour}
 }
 
 func (c *Collector) Run(ctx context.Context, every time.Duration) {

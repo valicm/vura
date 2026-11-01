@@ -166,7 +166,7 @@ function colorFor(b) {
 function labelFor(b, fallback) { return (bucketMeta[b] && bucketMeta[b].label) || fallback || b; }
 
 async function loadOverview() {
-  const r = await fetch('/api/vura/overview?days=10'); const o = await r.json();
+  const r = await fetch('/api/vura/overview?days=32'); const o = await r.json();
   const today = o.days.find(d => d.state === 'today');
   if (today) {
     $('#h-observed').textContent = hm(today.observed); $('#h-logged').textContent = hm(today.logged);

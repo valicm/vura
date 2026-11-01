@@ -66,7 +66,15 @@ func Worklog(ctx context.Context, in Input) (string, error) {
 	if err := json.Unmarshal(out, &resp); err != nil {
 		return "", fmt.Errorf("claude: decode: %w", err)
 	}
-	text := strings.TrimSpace(strings.Trim(strings.TrimSpace(resp.Result), `"“”`))
+	// The model sometimes appends commentary after a blank line; the
+	// description is the first non-empty line only.
+	text := ""
+	for _, line := range strings.Split(resp.Result, "\n") {
+		if text = strings.TrimSpace(line); text != "" {
+			break
+		}
+	}
+	text = strings.TrimSpace(strings.Trim(text, `"“”`))
 	text = strings.TrimSuffix(text, ".")
 	if text == "" {
 		return "", fmt.Errorf("claude: empty result")
